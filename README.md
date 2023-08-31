@@ -6,4 +6,4 @@ Updating for presentation at EA-HR meeting on 31 August 2023.
 
 # References
 
-IRICEJ technical meeting and ASJ technical meeting in March 2023. Japanese technical reports will be accessible soon.
+APSIPA2023 version will be available soon (several days after 6 September 2023)
