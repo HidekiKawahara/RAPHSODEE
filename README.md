@@ -1,6 +1,6 @@
 # RAPHSODEE
 
-A new series of acoustic attributes analysis. This is an extension of safeguaring sounds and CAPRICEP. This also has a fast but echologically inefficient realtime reverberation application.
+A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
 ## Release note
 
@@ -16,8 +16,8 @@ How to calibrate using a sound pressure meter
 
 ## References
 
-Kawahara, H., Yatabe, K., Sakakibara, K.-I., Mizumachi, M., & Kitamura, T. (2023). Simultaneous Measurement of Multiple Acoustic Attributes Using Structured Periodic Test Signals Including Music and Other Sound Materials. In arXiv [cs.SD]. arXiv. <http://arxiv.org/abs/2309.02767>
+Kawahara, H., Yatabe, K., Sakakibara, K.-I., Mizumachi, M., & Kitamura, T. (2023). Simultaneous Measurement of Multiple Acoustic Attributes Using Structured Periodic Test Signals, Including Music and Other Sound Materials. In arXiv [cs.SD]. arXiv. <http://arxiv.org/abs/2309.02767>
 
-This article was presented at APSIPA2023 at 1st Nov. 2023. It will be accessible opne on APSIPA web site.
+This article was presented at APSIPA2023 on 1st Nov. 2023. It will be accessible on the APSIPA website.
 
 <http://www.apsipa.org/>
