@@ -9,7 +9,7 @@ A new series of acoustic attributes analysis. This is an extension of safeguardi
  Name of application:
 
 Quick start guide for this tool:
-<[https://youtu.be/-nxD-8hbCv4?si=VOq75ebdYVzpc4Iw](https://youtu.be/3Ial0qaEBfs?si=H3UbsTpC37mwZRxc)>
+<[https://youtu.be/3Ial0qaEBfs?si=H3UbsTpC37mwZRxc](https://youtu.be/3Ial0qaEBfs?si=H3UbsTpC37mwZRxc)>
 
 How to calibrate using a sound pressure meter
 <https://youtu.be/s1oBoDsT5zA?si=CISF4i3SQLgEJQ94>
