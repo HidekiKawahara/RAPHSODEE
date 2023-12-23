@@ -3,6 +3,10 @@
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
 ## Release note
+### Interactive and real-time tool for acoustic environment analysis: prerelease version
+
+Compiled application for macOS is in the srd directory. Name is:
+MyAppInstaller_web.zip
 
 ### Interactive and real-time tool for acoustic environment analysis: prerelease version, 02/Nov./2023, APSIPA2023 version
 
