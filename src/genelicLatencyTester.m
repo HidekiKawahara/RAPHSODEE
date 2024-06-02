@@ -1,4 +1,4 @@
-function output = genelicLatencyTester(iResp,ioBlockL,driverName,fs)
+function output = genelicLatencyTester(iResp,ioBlockL,driverName,fs,varargin)
 
 %%
 
@@ -16,19 +16,24 @@ function output = genelicLatencyTester(iResp,ioBlockL,driverName,fs)
 %   See the License for the specific language governing permissions and
 %   limitations under the License.
 
+%disp(nargin);
+testDuration = 5; % seconds
+switch nargin
+    case 5
+        testDuration = varargin{1};
+end
 output.impulseResponse = iResp;
 output.ioBlockLength = ioBlockL;
 output.driverName = driverName;
 output.samplingFrequency = fs;
-%
-fftl = 2^floor(log2(length(iResp)+2*ioBlockL));
+%fftl = 2^floor(log2(length(iResp)+2*ioBlockL)); % is it OK?
+fftl = 2^ceil(log2(length(iResp)+2*ioBlockL));
 x = iResp*0;
 x(1) = 0.05;
 hReverbe = fft(x,fftl);
 playrec = audioPlayerRecorder(fs,"Device", driverName, ...
     "BitDepth","24-bit integer" ...
     ,"SupportVariableSize",true,"BufferSize",ioBlockL);
-testDuration = 5; % seconds
 nIteration = round(testDuration/(ioBlockL/fs));
 currentIteration = 0;
 buffVec = zeros(ioBlockL,1);
@@ -53,6 +58,7 @@ pause(1)
 while currentIteration < nIteration
     currentIteration = currentIteration + 1;
     tmpOut = buffVec+simInput((currentIteration-1)*ioBlockL+(1:ioBlockL));
+    %tmpOut = simInput((currentIteration-1)*ioBlockL+(1:ioBlockL));
     [readData,nUnderruns,nOverruns] = ...
         playrec([tmpOut tmpOut]);
     caputuredSignal((currentIteration-1)*ioBlockL+(1:ioBlockL)) = readData;
@@ -76,6 +82,7 @@ tt = (1:fs)'/fs;
 [~,secIdx] = max(abs(respT).*(tt > tt(maxidx)+0.01));
 latency = tt(secIdx)-tt(maxidx);
 release(playrec);
+output.fftLength = fftl;
 output.overRunRecord = overRunRecord;
 output.underRunRecord = underRunRecord;
 output.simInput = simInput;
