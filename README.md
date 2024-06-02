@@ -5,8 +5,11 @@ A new series of acoustic attributes analysis. This is an extension of safeguardi
 ## Release note
 ### Interactive and real-time tool for acoustic environment analysis: prerelease version
 
-Compiled application for macOS is in the srd directory. Name is:
+The compiled application for macOS is in the src directory. Name is:
 MyAppInstaller_web.zip
+
+The compiled application for Windows11 is in the src directory. Name is:
+MyAppInstaller_web.exe
 
 ### Interactive and real-time tool for acoustic environment analysis: prerelease version, 02/Nov./2023, APSIPA2023 version
 
