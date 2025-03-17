@@ -3,6 +3,10 @@
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
 ## (Pre) Release note
+### Updated an interactive and real-time tool for testing acoustic conditions (Annual spring meeting of ASJ 2025)
+
+Name of application: acousticConditionChecker
+
 ### Interactive and real-time tools for testing acoustic environment effects on speech production: prerelease version (ASJ Hearing Research technical meeting May 2024)
 
 Name of application: reverbeLmbrdSpeechTesterRev
