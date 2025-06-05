@@ -2,6 +2,12 @@
 
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
+## New important implementation
+Please check samplingRateConvByDFTwin.m function in src. It is an independent implementation of the following algorithm.
+% Välimäki, V., & Bilbao, S. (2023). Giant FFTs for Sample-Rate Conversion.
+% Journal of the Audio Engineering Society, 71(3), 88–99.
+% DOI: https://doi.org/10.17743/jaes.2022.0061
+
 ## (Pre) Release note
 ### Updated an interactive and real-time tool for testing acoustic conditions (Annual spring meeting of ASJ 2025)
 
