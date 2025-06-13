@@ -16,7 +16,7 @@ Please check samplingRateConvByDFTwin.m function in src. It is an independent im
 
 ## Note: retrospective use of safeguarding (2025 June 13)
 
-You don't need to safeguard a signal. You can enjoy benefits of safeguarding. Plase refer the following script in src:
+You don't need to safeguard a signal. You can enjoy the benefits of safeguarding. Please refer to the following script in src:
 
 testScrptForEA2025July.m
 
