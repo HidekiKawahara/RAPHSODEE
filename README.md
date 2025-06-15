@@ -2,7 +2,7 @@
 
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
-## New important implementation (2025 13 June)
+## New important implementation (2025, 13 June)
 I uploaded a MATLAB m-function to make any signal into a safeguarded signal. Thanks to the giant-FFT SRC, you can make the signal sampling frequency as you like. Please use the interactive and real-time acoustic condition checker tool for testing the generated safeguarded signals. The name of the function is:
 
 signalSafeguardwithGiantFFTSRC
@@ -19,6 +19,8 @@ Please check samplingRateConvByDFTwin.m function in src. It is an independent im
 You don't need to safeguard a signal. You can enjoy the benefits of safeguarding. Please refer to the following script in src:
 
 testScrptForEA2025July.m
+
+### A research memo is added in the doc folder (2025, 16 June)
 
 ## (Pre) Release note
 ### Updated an interactive and real-time tool for testing acoustic conditions (Annual spring meeting of ASJ 2025)
