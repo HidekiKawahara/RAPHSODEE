@@ -76,7 +76,7 @@ for ii = 1:nChannel
     avPw(ii) = sum(fBank(:,ii).*abs(xF).^2)/sum(fBank(:,ii));
 end
 absFxBi = abs(fxBi);
-avPwi = interp1([0;fc],[-50;10*log10(avPw)],absFxBi,"linear","extrap");
+avPwi = interp1([0;fc],10*log10(avPw([1 1:end])),absFxBi,"linear","extrap");
 %% Set signal safeguarding shaper
 cumPw = 10*log10(cumsum(abs(xF).^2)/sum(abs(xF).^2));
 fLow = max(fx(cumPw<cumPw(end)-23));
@@ -114,15 +114,15 @@ if nargout == 2
     xFfixC(abs(xF)<constantGuard) = constantGuard * ...
         xFfixC(abs(xF)<constantGuard) ./abs(xFfixC(abs(xF)<constantGuard));
     xSgConst = real(ifft(xFfixC));
+    maxLevel = max(20*log10(abs(xF)));
     figure;
-    set(gcf,"Position",[680   632   611   246])
     varSGFighandle = gcf;
     semilogx(fx, 20*log10(abs(xF)),"LineWidth",2);grid on;
-    set(gca,"xlim",[20 fs/2],"LineWidth",2,"fontsize",14);
+    set(gca,"LineWidth",2,"fontsize",14);
     hold on
     semilogx(fx, 20*log10(abs(fft(xSg))),"LineWidth",2);grid on;
     semilogx(fc,10*log10(avPw),"LineWidth",2);
-    axis([20 fs/2 -40 60])
+    axis([20 fs/2 maxLevel+[-95 5]])
     legend("original","safeguard","smoothed av.","Orientation","horizontal","Location","southwest");
     xlabel("frequency (Hz)")
     ylabel("level (dB)")
@@ -130,15 +130,14 @@ if nargout == 2
     
     %
     figure;
-    set(gcf,"Position",[680   632   611   246])
     constSGFighandle = gcf;
     semilogx(fx, 20*log10(abs(xF)),"LineWidth",2);grid on;
-    set(gca,"xlim",[20 fs/2],"LineWidth",2,"fontsize",14);
+    set(gca,"LineWidth",2,"fontsize",14);
     hold on
     semilogx(fx, 20*log10(abs(fft(xSgConst))),"LineWidth",2);grid on;
     semilogx(fc,xStdDb+0*fc,"LineWidth",2);
     %yline(xStdDb,"LineWidth",2);
-    axis([20 fs/2 -40 60])
+    axis([20 fs/2 maxLevel+[-95 5]])
     legend("original","safeguard","average level","Orientation","horizontal","Location","southwest");
     xlabel("frequency (Hz)")
     ylabel("level (dB)")
