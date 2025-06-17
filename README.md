@@ -20,7 +20,7 @@ You don't need to safeguard a signal in advance. You can enjoy the benefits of s
 
 retroSGSample.m
 
-### A research memo is added in the doc folder (2025, 16 June)
+### A research memo is added in the doc folder (2025, 16 June, June 17 updated)
 
 ## (Pre) Release note
 ### Updated an interactive and real-time tool for testing acoustic conditions (Annual spring meeting of ASJ 2025)
