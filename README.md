@@ -14,11 +14,11 @@ Please check samplingRateConvByDFTwin.m function in src. It is an independent im
 % Journal of the Audio Engineering Society, 71(3), 88–99.
 % DOI: https://doi.org/10.17743/jaes.2022.0061
 
-## Note: retrospective use of safeguarding (2025 June 13)
+## Note: retrospective use of safeguarding (2025 June 13, 17)
 
-You don't need to safeguard a signal. You can enjoy the benefits of safeguarding. Please refer to the following script in src:
+You don't need to safeguard a signal in advance. You can enjoy the benefits of safeguarding retrospectively. Please refer to the following script in src:
 
-testScrptForEA2025July.m
+retroSGSample.m
 
 ### A research memo is added in the doc folder (2025, 16 June)
 
