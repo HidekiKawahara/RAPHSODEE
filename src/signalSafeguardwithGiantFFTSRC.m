@@ -43,16 +43,20 @@ function [y, output] ...
 
 startTic = tic;
 if fsIn == fsOut
-    fs = fsIn;
-    fsIn = 96000;
-    fsOut = 44100;
     xIn = xOriginal;
+    lData = length(xIn);
+    if rem(lData,11025)>0 && rem(lData,8000)>0
+        nData = min([2^ceil(log2(lData)),2^ceil(log2(lData/3))*3, ...
+            2^ceil(log2(lData/5))*5]);
+    else
+        nData = lData;
+    end
 else
     xIn = samplingRateConvByDFTwin(xOriginal,fsIn,fsOut);
-    fs = fsOut;
+    baseLength = fsIn*fsOut/gcd(fsIn,fsOut)^2;
+    nData = baseLength*ceil(length(xIn)/baseLength);
 end
-baseLength = fsIn*fsOut/gcd(fsIn,fsOut)^2;
-nData = baseLength*ceil(length(xIn)/baseLength);
+    fs = fsOut;
 [~, nChannel] = size(xIn);
 x = [xIn;zeros(nData-length(xIn),nChannel)];
 %% giant FFT: Fourier transform of whole signal
@@ -80,6 +84,9 @@ avPwi = interp1([0;fc],10*log10(avPw([1 1:end])),absFxBi,"linear","extrap");
 %% Set signal safeguarding shaper
 cumPw = 10*log10(cumsum(abs(xF).^2)/sum(abs(xF).^2));
 fLow = max(fx(cumPw<cumPw(end)-23));
+if isempty(fLow) || fLow < 10
+    fLow = 10;
+end
 %fLow = 70;
 if fsIn < fsOut
     fHigh = fsIn/2-3000;
