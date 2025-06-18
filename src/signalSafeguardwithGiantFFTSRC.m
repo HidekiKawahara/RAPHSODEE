@@ -42,12 +42,12 @@ function [y, output] ...
 %limitations under the License.
 
 startTic = tic;
-if fsIn == fsOut
+if fsIn == fsOut % buffer length tuning
     xIn = xOriginal;
     lData = length(xIn);
     if rem(lData,11025)>0 && rem(lData,8000)>0
         nData = min([2^ceil(log2(lData)),2^ceil(log2(lData/3))*3, ...
-            2^ceil(log2(lData/5))*5]);
+            2^ceil(log2(lData/5))*5,2^ceil(log2(lData/7))*7]);
     else
         nData = lData;
     end
