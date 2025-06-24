@@ -9,7 +9,7 @@ signalSafeguardwithGiantFFTSRC
 
 Have fun!
 
-Please check samplingRateConvByDFTwin.m function in src. It is an independent implementation of the following algorithm.
+Please check samplingRateConvByDFTwin.m function in src. It is an independent implementation of the following algorithm. Refactored based on Gemini Advanced's suggestions on 25 June 2025.
 
 Välimäki, V., & Bilbao, S. (2023). Giant FFTs for Sample-Rate Conversion.
 Journal of the Audio Engineering Society, 71(3), 88–99.
