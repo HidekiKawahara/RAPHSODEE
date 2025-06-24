@@ -57,13 +57,13 @@ xExt = [x;zeros(l_buffer-nData,nChannel)];
 xF = fft(xExt)/(l_buffer);
 fxx = (0:l_buffer-1)'/l_buffer*fsIn;
 l_bufferOut = l_buffer*fsOut/fsIn;
+tmpFs = min(fsIn,fsOut);
+fxxTrim = fxx(fxx<= tmpFs/2);
+shaper = ones(length(fxxTrim),1);
+tmp = (fxxTrim(fxxTrim>tmpFs/2-transW)-(tmpFs/2-transW))/transW;
+shaper(fxxTrim>tmpFs/2-transW) = 0.5+0.5*cos(tmp*pi);
+xOutFHalf = xF(fxx<= tmpFs/2,:);
 if fsIn > fsOut
-    xOutFHalf = xF(fxx<= fsOut/2,:);
-    fxxTrim = fxx(fxx<= fsOut/2);
-    l_half = length(xOutFHalf);
-    shaper = ones(l_half,1);
-    tmp = (fxxTrim(fxxTrim>fsOut/2-transW)-(fsOut/2-transW))/transW;
-    shaper(fxxTrim>fsOut/2-transW) = 0.5+0.5*cos(tmp*pi);
     xOutFHalf = xOutFHalf.*shaper;
     if rem(l_bufferOut,2) == 0
         xOutFHalf(end,:) = real(xOutFHalf(end,:));
@@ -73,12 +73,7 @@ if fsIn > fsOut
     end
 else
     xOutF = zeros(l_bufferOut,nChannel);
-    xOutFHalf = xF(fxx<= fsIn/2,:);
-    fxxTrim = fxx(fxx<= fsIn/2);
     l_half = length(xOutFHalf);
-    shaper = ones(l_half,1);
-    tmp = (fxxTrim(fxxTrim>fsIn/2-transW)-(fsIn/2-transW))/transW;
-    shaper(fxxTrim>fsIn/2-transW) = 0.5+0.5*cos(tmp*pi);
     xOutFHalf = xOutFHalf.*shaper;
     xOutF(1:l_half,:) = xOutFHalf;
     xOutF(end:-1:end-l_half+2,:) = conj(xOutFHalf(2:end,:));
