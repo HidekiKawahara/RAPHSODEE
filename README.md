@@ -2,6 +2,12 @@
 
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
+## Giant-FFT SRC is refactored and made a new function (28 June, 2025)
+
+I refactored signalSafeguardwithGiantFFTSRC using Gemini Advanced and made a new function samplingRateConvGiantFFT. Regression test revealed bugs in the original implementation. Later recommend to use:
+
+samplingRateConvGiantFFT.m
+
 ## New important implementation (2025, 13 June, 17 bug fix, 19, 20 Update )
 I uploaded a MATLAB m-function to make any signal into a safeguarded signal. Thanks to the giant-FFT SRC, you can make the signal sampling frequency as you like. Please use the interactive and real-time acoustic condition checker tool for testing the generated safeguarded signals. The name of the function is:
 
