@@ -19,7 +19,7 @@ function [y,output] = samplingRateConvByDFTwin(x,fsIn,fsOut,varargin)
 % Pattern 3
 %  [y,output] = samplingRateConvByDFTwin(x,fsIn,fsOut,transW)
 % Artument (additional)
-%      transW  : transition width at high-end (Hz), default is 4000
+%      transW  : transition width at high-end (Hz), default is 2000
 % Output
 %      output  : structure with detailed debug data
 %
@@ -47,7 +47,7 @@ function [y,output] = samplingRateConvByDFTwin(x,fsIn,fsOut,varargin)
 
 startTic = tic;
 [nData, nChannel] = size(x);
-transW = 4000;
+transW = 2000;
 if nargin == 4
     transW = varargin{1};
 end
@@ -58,11 +58,18 @@ xF = fft(xExt)/(l_buffer);
 fxx = (0:l_buffer-1)'/l_buffer*fsIn;
 l_bufferOut = l_buffer*fsOut/fsIn;
 tmpFs = min(fsIn,fsOut);
-fxxTrim = fxx(fxx<= tmpFs/2);
+%xOutFHalf = xF(fxx<= tmpFs/2,:); % this was fragile
+[minv,bestID]=min(abs(fxx-tmpFs/2));
+if minv>10^(-10) % fragile: fails when signal is longer then 28 hous
+    xOutFHalf = xF(fxx<= tmpFs/2,:);
+    fxxTrim = fxx(fxx<= tmpFs/2);
+else
+    xOutFHalf = xF(1:bestID,:);
+    fxxTrim = fxx(1:bestID);
+end
 shaper = ones(length(fxxTrim),1);
 tmp = (fxxTrim(fxxTrim>tmpFs/2-transW)-(tmpFs/2-transW))/transW;
 shaper(fxxTrim>tmpFs/2-transW) = 0.5+0.5*cos(tmp*pi);
-xOutFHalf = xF(fxx<= tmpFs/2,:);
 if fsIn > fsOut
     xOutFHalf = xOutFHalf.*shaper;
     if rem(l_bufferOut,2) == 0
