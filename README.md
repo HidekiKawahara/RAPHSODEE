@@ -2,6 +2,10 @@
 
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
+## Giant-FFT implementation of acoustic environment test tool (13 Sept., 2025) (quick and dirty)
+
+acousticConditionChecker is the application
+
 ## Giant-FFT SRC is refactored and made a new function (28 June, 2025)
 
 I refactored signalSafeguardwithGiantFFTSRC using Gemini Advanced and made a new function samplingRateConvGiantFFT. Regression test revealed bugs in the original implementation. Later recommend to use:
