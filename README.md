@@ -2,6 +2,13 @@
 
 A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
+## Test scripts for giant-FFT implementation of safeguarding (07 Oct., 2025)
+
+oneShotSGandRetroSG2channel.m
+
+oneShotRetroSGWOtestSignal.m
+
+
 ## Giant-FFT implementation of acoustic environment test tool (13 Sept., 2025) (quick and dirty)
 
 acousticConditionChecker is the application
