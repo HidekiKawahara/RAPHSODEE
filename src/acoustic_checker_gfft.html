@@ -1,0 +1,2213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acoustic Checker by Giant-FFT (Web Edition)</title>
+    <!--
+    MIT License
+    
+    Copyright (c) 2026 Hideki Kawahara
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+    -->
+    <style>
+      :root {
+        --bg: #eef1f5;
+        --panel-bg: #ffffff;
+        --border: #cfd6df;
+        --text: #1f2937;
+        --blue: rgb(0, 114, 189);
+        --orange: rgb(217, 83, 25);
+        --yellow: rgb(237, 177, 32);
+        --green: rgb(0, 160, 0);
+      }
+      * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+      body {
+        margin: 0; padding: 10px; background: var(--bg); color: var(--text);
+        height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+      }
+      .app-grid {
+        display: grid;
+        grid-template-columns: 280px 190px 1fr;
+        gap: 10px;
+        height: 100%;
+        min-height: 0;
+      }
+      .panel {
+        background: var(--panel-bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-height: 0;
+      }
+      .panel-title {
+        font-weight: 700;
+        font-size: 13px;
+        color: #374151;
+        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 5px;
+        margin-bottom: 2px;
+      }
+      label { font-size: 12px; font-weight: 600; color: #374151; }
+      label.disabled { color: #9ca3af; }
+      .status-box {
+        background: #f4f6f8;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 8px;
+        font-size: 12px;
+        min-height: 54px;
+        line-height: 1.35;
+        word-break: break-word;
+      }
+      select, button, input[type="number"] {
+        width: 100%;
+        padding: 6px 8px;
+        font-size: 12px;
+        border: 1px solid #b8c2cc;
+        border-radius: 4px;
+        background: #fff;
+      }
+      button {
+        cursor: pointer;
+        font-weight: 600;
+        background: #f8fafc;
+        transition: background 0.15s;
+      }
+      button:hover:not(:disabled) { background: #e2e8f0; }
+      button:disabled, select:disabled, input:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .group-box {
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .group-title {
+        font-size: 11px;
+        font-weight: 700;
+        color: #4b5563;
+      }
+      .radio-row { display: flex; gap: 10px; align-items: center; }
+      .radio-col { display: flex; flex-direction: column; gap: 5px; }
+      .radio-item { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; }
+      .lamp-row { display: flex; align-items: center; justify-content: space-between; padding: 4px 2px; }
+      .lamp {
+        width: 18px; height: 18px; border-radius: 50%;
+        background: #bdc3c7; border: 1px solid #95a5a6;
+      }
+      .lamp.active {
+        background: #2ecc71; border-color: #27ae60;
+        box-shadow: 0 0 8px rgba(46, 204, 113, 0.7);
+      }
+      .right-panel {
+        display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0;
+      }
+      .plot-container-top {
+        flex: 5; position: relative; min-height: 180px;
+        border: 1px solid var(--border); border-radius: 4px; background: #fff;
+      }
+      .slider-row {
+        display: flex; align-items: center; gap: 10px; padding: 2px 6px;
+      }
+      .slider-row input[type="range"] { flex: 1; }
+      .bottom-plots {
+        flex: 4; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; min-height: 160px;
+      }
+      .plot-box {
+        position: relative; border: 1px solid var(--border); border-radius: 4px; background: #fff;
+      }
+      canvas { width: 100%; height: 100%; display: block; }
+      .spacer { flex: 1; }
+    </style>
+  </head>
+  <body>
+    
+    <div class="app-grid" id="appRoot">
+      <!-- LEFT PANEL -->
+      <div class="panel">
+        <div class="panel-title">System &amp; Stream Control</div>
+        <label>System Status</label>
+        <div class="status-box" id="statusLabel">Click 'Set working folder' to begin.</div>
+        
+        <label id="ioDeviceLabel" class="disabled">Input / Output device selection</label>
+        <select id="ioDeviceDropdown" disabled></select>
+        <select id="outputDeviceDropdown" disabled title="Output Device (Chrome/Edge)"></select>
+        
+        <label id="fsLabel" class="disabled">Sampling frequency</label>
+        <select id="fsDropdown" disabled></select>
+        
+        <label id="inChLabel" class="disabled">Input Channels</label>
+        <select id="inChDropdown" disabled>
+          <option value="0" selected>0</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+        </select>
+        
+        <button id="btnLoadCyclic" disabled>Load cyclic data</button>
+        <input type="file" id="cyclicFileInput" accept=".wav,.aif,.aiff" style="display:none">
+        
+        <div class="group-box">
+          <div class="group-title">Output channel</div>
+          <div class="radio-row">
+            <label class="radio-item"><input type="radio" name="outCh" id="rbOutL" checked disabled> L</label>
+            <label class="radio-item"><input type="radio" name="outCh" id="rbOutR" disabled> R</label>
+            <label class="radio-item"><input type="radio" name="outCh" id="rbOutLR" disabled> L and R</label>
+          </div>
+        </div>
+        
+        <div class="group-box">
+          <div class="group-title">Spectrum display</div>
+          <div class="radio-col">
+            <label class="radio-item"><input type="radio" name="specDisp" id="rbRawDFT" checked disabled> Raw DFT</label>
+            <label class="radio-item"><input type="radio" name="specDisp" id="rbOct6th" disabled> 1/3 octave smoothed</label>
+            <label class="radio-item"><input type="radio" name="specDisp" id="rbOct12th" disabled> 1/12 octave smoothed</label>
+          </div>
+        </div>
+        
+        <button id="btnStart" disabled style="height:32px;">START</button>
+        <button id="btnStop" disabled style="height:32px;">STOP</button>
+        
+        <div class="spacer"></div>
+        <button id="btnSnapshotGUI" disabled>snapshot GUI</button>
+      </div>
+      
+      <!-- CENTER PANEL -->
+      <div class="panel">
+        <div class="panel-title">Workspace &amp; Calibration</div>
+        <button id="btnSetFolder">Set working folder</button>
+        
+        <div class="lamp-row">
+          <label id="lblRecLamp" class="disabled">Recording</label>
+          <div id="recLamp" class="lamp"></div>
+        </div>
+        
+        <button id="btnVoiceMemo" disabled>Voice memo 5s</button>
+        
+        <div class="group-box" style="margin-top:6px;">
+          <div class="group-title">Calibration Ch-1</div>
+          <button id="btnCalibrate1" disabled>Calibrate</button>
+          <label id="lblMeasuredSPL" class="disabled">Measured SPL</label>
+          <select id="measuredSPLDropdown" disabled></select>
+          <label id="lblCalVal" class="disabled">CAL. Value: dB</label>
+          <input type="number" id="calValSpin" step="0.1" value="0.0" disabled>
+        </div>
+        
+        <div class="spacer"></div>
+      </div>
+      
+      <!-- RIGHT PANEL -->
+      <div class="panel right-panel">
+        <div class="panel-title">Real-Time Acoustic Analysis</div>
+        
+        <div class="plot-container-top">
+          <canvas id="spectrumCanvas"></canvas>
+        </div>
+        
+        <div class="slider-row">
+          <label id="lblBpfSlider" style="min-width:115px;">BPF fc: 1000 Hz</label>
+          <input type="range" id="bpfSlider" min="1" max="100" value="50" step="1" disabled>
+        </div>
+        
+        <div class="bottom-plots">
+          <div class="plot-box">
+            <canvas id="bandSplCanvas"></canvas>
+          </div>
+          <div class="plot-box">
+            <canvas id="powerRespCanvas"></canvas>
+          </div>
+        </div>
+        
+        <div style="display:flex;">
+          <button id="btnSnapshotLevel" style="width:140px;" disabled>Snapshot Level</button>
+        </div>
+      </div>
+    </div>
+    
+    <script>
+      "use strict";
+      
+      /* ============================================================================
+ * 1. Fast Arbitrary-Length FFT (Radix-2 Cooley-Tukey + Bluestein Chirp-Z)
+ * ============================================================================ */
+      function nextPow2(n) {
+        let p = 1;
+        while (p < n) p <<= 1;
+        return p;
+      }
+      
+      function fftRadix2(re, im, inverse) {
+        const n = re.length;
+        let j = 0;
+        for (let i = 0; i < n; i++) {
+          if (i < j) {
+            let tr = re[i]; re[i] = re[j]; re[j] = tr;
+            let ti = im[i]; im[i] = im[j]; im[j] = ti;
+          }
+          let m = n >> 1;
+          while (m >= 1 && j >= m) { j -= m; m >>= 1; }
+          j += m;
+        }
+        const sign = inverse ? 1 : -1;
+        for (let len = 2; len <= n; len <<= 1) {
+          const half = len >> 1;
+          const ang = sign * 2 * Math.PI / len;
+          const wlenRe = Math.cos(ang);
+          const wlenIm = Math.sin(ang);
+          for (let i = 0; i < n; i += len) {
+            let wRe = 1.0, wIm = 0.0;
+            for (let k = 0; k < half; k++) {
+              const uRe = re[i + k], uIm = im[i + k];
+              const vIdx = i + k + half;
+              const vRe = re[vIdx] * wRe - im[vIdx] * wIm;
+              const vIm = re[vIdx] * wIm + im[vIdx] * wRe;
+              re[i + k] = uRe + vRe;
+              im[i + k] = uIm + vIm;
+              re[vIdx] = uRe - vRe;
+              im[vIdx] = uIm - vIm;
+              const nextWRe = wRe * wlenRe - wIm * wlenIm;
+              wIm = wRe * wlenIm + wIm * wlenRe;
+              wRe = nextWRe;
+            }
+          }
+        }
+        if (inverse) {
+          for (let i = 0; i < n; i++) { re[i] /= n; im[i] /= n; }
+        }
+      }
+      
+      const bluesteinCache = new Map();
+      function getBluesteinPlan(n) {
+        if (bluesteinCache.has(n)) return bluesteinCache.get(n);
+        const m = nextPow2(2 * n - 1);
+        const bkRe = new Float64Array(n);
+        const bkIm = new Float64Array(n);
+        const bFftRe = new Float64Array(m);
+        const bFftIm = new Float64Array(m);
+        
+        for (let k = 0; k < n; k++) {
+          const angle = (Math.PI * ((k * k) % (2 * n))) / n;
+          const c = Math.cos(angle);
+          const s = Math.sin(angle);
+          bkRe[k] = c;
+          bkIm[k] = s;
+          bFftRe[k] = c;
+          bFftIm[k] = s;
+          if (k > 0) {
+            bFftRe[m - k] = c;
+            bFftIm[m - k] = s;
+          }
+        }
+        fftRadix2(bFftRe, bFftIm, false);
+        const plan = { n, m, bkRe, bkIm, bFftRe, bFftIm };
+        bluesteinCache.set(n, plan);
+        return plan;
+      }
+      
+      function fftGeneral(inRe, inIm, inverse = false) {
+        const n = inRe.length;
+        const outRe = new Float64Array(n);
+        const outIm = new Float64Array(n);
+        if (n === 0) return { re: outRe, im: outIm };
+        
+        if ((n & (n - 1)) === 0) {
+          outRe.set(inRe);
+          if (inIm) outIm.set(inIm);
+          fftRadix2(outRe, outIm, inverse);
+          return { re: outRe, im: outIm };
+        }
+        
+        const plan = getBluesteinPlan(n);
+        const m = plan.m;
+        const aRe = new Float64Array(m);
+        const aIm = new Float64Array(m);
+        
+        for (let k = 0; k < n; k++) {
+          const xr = inRe[k];
+          const xi = inIm ? (inverse ? -inIm[k] : inIm[k]) : 0.0;
+          const br = plan.bkRe[k];
+          const bi = -plan.bkIm[k]; // conj(b_k)
+          aRe[k] = xr * br - xi * bi;
+          aIm[k] = xr * bi + xi * br;
+        }
+        
+        fftRadix2(aRe, aIm, false);
+        
+        for (let i = 0; i < m; i++) {
+          const ar = aRe[i], ai = aIm[i];
+          const br = plan.bFftRe[i], bi = plan.bFftIm[i];
+          aRe[i] = ar * br - ai * bi;
+          aIm[i] = ar * bi + ai * br;
+        }
+        
+        fftRadix2(aRe, aIm, true);
+        
+        for (let k = 0; k < n; k++) {
+          const br = plan.bkRe[k];
+          const bi = -plan.bkIm[k];
+          let yr = aRe[k] * br - aIm[k] * bi;
+          let yi = aRe[k] * bi + aIm[k] * br;
+          if (inverse) {
+            yr /= n;
+            yi = -yi / n;
+          }
+          outRe[k] = yr;
+          outIm[k] = yi;
+        }
+        return { re: outRe, im: outIm };
+      }
+      
+      /* ============================================================================
+ * 2. Port of constantQgaussBPFweight.m (Log-Frequency Gaussian BPF)
+ * ============================================================================ */
+      function constantQGaussBPFWeight(frequencyAxis, bandWidthInOctave, stepInOctave) {
+        const nFreq = frequencyAxis.length;
+        const fsEstimate = frequencyAxis[nFreq - 1] + frequencyAxis[1];
+        const fcLow = 1000.0 * Math.pow(2.0, -6);
+        const maxOctaveIndex = Math.log2((fsEstimate / 2.0) / fcLow);
+        
+        const fcList = [];
+        for (let oct = 0.0; oct <= maxOctaveIndex + 1e-12; oct += stepInOctave) {
+          fcList.push(fcLow * Math.pow(2.0, oct));
+        }
+        const fcSet = new Float64Array(fcList);
+        const nChannel = fcSet.length;
+        
+        // norminv(0.75) * 2 = 1.3489795003921634
+        const baseSigma = 1.3489795003921634;
+        const sigmaLog = bandWidthInOctave / 2.0 / baseSigma;
+        const inv2Sigma2 = 1.0 / (2.0 * sigmaLog * sigmaLog);
+        
+        const logFreq = new Float64Array(nFreq);
+        for (let i = 0; i < nFreq; i++) {
+          logFreq[i] = frequencyAxis[i] > 0 ? Math.log2(frequencyAxis[i]) : -Infinity;
+        }
+        
+        const filterWeight = new Array(nChannel);
+        const quadByChannel = new Array(nChannel);
+        
+        for (let ch = 0; ch < nChannel; ch++) {
+          const centerLog = Math.log2(fcSet[ch]);
+          const wNorm = new Float64Array(nFreq);
+          const qCol = new Float64Array(nFreq);
+          let colSum = 0.0;
+          
+          for (let i = 0; i < nFreq; i++) {
+            if (frequencyAxis[i] > 0) {
+              const diff = logFreq[i] - centerLog;
+              const g = Math.exp(-(diff * diff) * inv2Sigma2);
+              wNorm[i] = g;
+              qCol[i] = Math.sqrt(Math.abs(g));
+              colSum += g;
+            }
+          }
+          const denom = Math.max(colSum, 1e-15);
+          for (let i = 0; i < nFreq; i++) wNorm[i] /= denom;
+          
+          filterWeight[ch] = wNorm;
+          quadByChannel[ch] = qCol;
+        }
+        
+        return { nChannel, filterWeight, quadByChannel, fcSet, bandWidthInOctave, stepInOctave };
+      }
+      
+      // Linear 1D interpolation with linear extrapolation matching MATLAB interp1(..., 'linear', 'extrap')
+      function interp1LinearExtrap(x, y, xq) {
+        const n = x.length;
+        const out = new Float64Array(xq.length);
+        const dx = x[1] - x[0];
+        for (let q = 0; q < xq.length; q++) {
+          const val = xq[q];
+          const pos = (val - x[0]) / dx;
+          let idx = Math.floor(pos);
+          if (idx < 0) idx = 0;
+          if (idx >= n - 1) idx = n - 2;
+          const frac = (val - x[idx]) / (x[idx + 1] - x[idx]);
+          out[q] = y[idx] + frac * (y[idx + 1] - y[idx]);
+        }
+        return out;
+      }
+      
+      /* ============================================================================
+ * 3. WAV Encoder (24-bit PCM)
+ * ============================================================================ */
+      function encodeWav24Bit(samplesInterleavedOrChannels, numChannels, sampleRate) {
+        const nFrames = samplesInterleavedOrChannels[0].length;
+        const bytesPerSample = 3;
+        const dataSize = nFrames * numChannels * bytesPerSample;
+        const buffer = new ArrayBuffer(44 + dataSize);
+        const view = new DataView(buffer);
+        
+        const writeStr = (offset, str) => {
+          for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+        };
+        
+        writeStr(0, "RIFF");
+        view.setUint32(4, 36 + dataSize, true);
+        writeStr(8, "WAVE");
+        writeStr(12, "fmt ");
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); // PCM
+        view.setUint16(22, numChannels, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+        view.setUint16(32, numChannels * bytesPerSample, true);
+        view.setUint16(34, 24, true);
+        writeStr(36, "data");
+        view.setUint32(40, dataSize, true);
+        
+        let offset = 44;
+        for (let i = 0; i < nFrames; i++) {
+          for (let ch = 0; ch < numChannels; ch++) {
+            let s = Math.max(-1.0, Math.min(1.0, samplesInterleavedOrChannels[ch][i]));
+            let intVal = Math.round(s < 0 ? s * 8388608 : s * 8388607);
+            if (intVal < 0) intVal += 16777216;
+            view.setUint8(offset, intVal & 0xff);
+            view.setUint8(offset + 1, (intVal >> 8) & 0xff);
+            view.setUint8(offset + 2, (intVal >> 16) & 0xff);
+            offset += 3;
+          }
+        }
+        return new Blob([buffer], { type: "audio/wav" });
+      }
+      
+      async function saveBlobToWorkspace(dirHandle, filename, blob) {
+        if (dirHandle) {
+          try {
+            const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            return;
+          } catch (e) {
+            console.warn("Direct directory write fallback to download:", e);
+          }
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+      
+      function getTimestampStr() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+      }
+      
+      /* ============================================================================
+ * 4. Canvas Plotter Engine (Log-Frequency & Linear-Time Plots)
+ * ============================================================================ */
+      class ScientificPlot {
+        constructor(canvas, opts) {
+          this.canvas = canvas;
+          this.ctx = canvas.getContext("2d");
+          this.logX = opts.logX || false;
+          this.xRange = opts.xRange || [20, 24000];
+          this.yRange = opts.yRange || [-80, 20];
+          this.xLabel = opts.xLabel || "";
+          this.yLabel = opts.yLabel || "";
+          this.title = opts.title || "";
+          this.customMajorLogTicks = opts.customMajorLogTicks || null;
+          this.curves = {};
+          this.vLine = opts.vLine || null;
+          
+          const ro = new ResizeObserver(() => this.draw());
+          ro.observe(canvas.parentElement);
+        }
+        
+        setCurve(name, xArr, yArr, color, width = 2) {
+          this.curves[name] = { x: xArr, y: yArr, color, width };
+        }
+        
+        draw() {
+          const dpr = window.devicePixelRatio || 1;
+          const rect = this.canvas.parentElement.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
+          this.canvas.width = rect.width * dpr;
+          this.canvas.height = rect.height * dpr;
+          
+          const ctx = this.ctx;
+          ctx.save();
+          ctx.scale(dpr, dpr);
+          
+          const W = rect.width;
+          const H = rect.height;
+          const padL = 56, padR = 16, padT = 26, padB = 36;
+          const pw = Math.max(10, W - padL - padR);
+          const ph = Math.max(10, H - padT - padB);
+          
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, W, H);
+          
+          const xMin = this.logX ? Math.log10(Math.max(1e-3, this.xRange[0])) : this.xRange[0];
+          const xMax = this.logX ? Math.log10(Math.max(1.0, this.xRange[1])) : this.xRange[1];
+          const yMin = this.yRange[0];
+          const yMax = this.yRange[1];
+          
+          const mapX = (val) => {
+            const v = this.logX ? Math.log10(val) : val;
+            return padL + ((v - xMin) / (xMax - xMin)) * pw;
+          };
+          const mapY = (val) => padT + (1.0 - (val - yMin) / (yMax - yMin)) * ph;
+          
+          // Grid & Ticks
+          ctx.lineWidth = 1;
+          ctx.font = "11px Arial";
+          ctx.fillStyle = "#111";
+          
+          if (this.logX) {
+            // Minor log grid
+            ctx.strokeStyle = "#e5e7eb";
+            for (let exp = 1; exp <= 5; exp++) {
+              for (let m = 1; m <= 9; m++) {
+                const f = Math.pow(10, exp) * m;
+                if (f >= this.xRange[0] && f <= this.xRange[1]) {
+                  const px = mapX(f);
+                  ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + ph); ctx.stroke();
+                }
+              }
+            }
+            // Major log ticks
+            const majors = this.customMajorLogTicks || [
+            { f: 100, label: "100" },
+            { f: 1000, label: "1000" },
+            { f: 10000, label: "10000" },
+            ];
+            ctx.strokeStyle = "#d1d5db";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            for (const t of majors) {
+              if (t.f >= this.xRange[0] && t.f <= this.xRange[1]) {
+                const px = mapX(t.f);
+                ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + ph); ctx.stroke();
+                ctx.fillText(t.label, px, padT + ph + 4);
+              }
+            }
+          } else {
+            ctx.strokeStyle = "#e5e7eb";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+            const nSteps = 5;
+            for (let i = 0; i <= nSteps; i++) {
+              const xv = xMin + (i / nSteps) * (xMax - xMin);
+              const px = mapX(xv);
+              ctx.beginPath(); ctx.moveTo(px, padT); ctx.lineTo(px, padT + ph); ctx.stroke();
+              ctx.fillText(xv.toFixed(1), px, padT + ph + 4);
+            }
+          }
+          
+          // Y Grid & Ticks
+          ctx.textAlign = "right";
+          ctx.textBaseline = "middle";
+          const yStep = (yMax - yMin) <= 80 ? 10 : 20;
+          for (let yv = Math.ceil(yMin / yStep) * yStep; yv <= yMax; yv += yStep) {
+            const py = mapY(yv);
+            ctx.strokeStyle = "#e5e7eb";
+            ctx.beginPath(); ctx.moveTo(padL, py); ctx.lineTo(padL + pw, py); ctx.stroke();
+            ctx.fillText(String(yv), padL - 6, py);
+          }
+          
+          // Clip to plot area for curves
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(padL, padT, pw, ph);
+          ctx.clip();
+          
+          for (const key of Object.keys(this.curves)) {
+            const c = this.curves[key];
+            if (!c.x || !c.y || c.x.length === 0) continue;
+            ctx.strokeStyle = c.color;
+            ctx.lineWidth = c.width;
+            ctx.beginPath();
+            let started = false;
+            for (let i = 0; i < c.x.length; i++) {
+              const xv = c.x[i];
+              const yv = c.y[i];
+              if (this.logX && xv <= 0) continue;
+              if (!Number.isFinite(yv)) continue;
+              const px = mapX(xv);
+              const py = mapY(yv);
+              if (!started) { ctx.moveTo(px, py); started = true; }
+              else { ctx.lineTo(px, py); }
+            }
+            ctx.stroke();
+          }
+          
+          // Vertical marker line (fc)
+          if (this.vLine && this.vLine.x > 0) {
+            const vx = mapX(this.vLine.x);
+            ctx.strokeStyle = this.vLine.color || "rgb(0, 180, 0)";
+            ctx.lineWidth = 2.5;
+            ctx.beginPath(); ctx.moveTo(vx, padT); ctx.lineTo(vx, padT + ph); ctx.stroke();
+            ctx.fillStyle = "rgb(0, 140, 0)";
+            ctx.font = "bold 11px Arial";
+            ctx.textAlign = "right";
+            ctx.textBaseline = "top";
+            ctx.fillText(this.vLine.label, vx - 4, padT + 4);
+          }
+          ctx.restore();
+          
+          // Plot Border
+          ctx.strokeStyle = "#374151";
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(padL, padT, pw, ph);
+          
+          // Title & Axis Labels
+          ctx.fillStyle = "#111";
+          ctx.font = "bold 12px Arial";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.fillText(this.title, padL + pw / 2, 6);
+          
+          ctx.font = "11px Arial";
+          ctx.fillText(this.xLabel, padL + pw / 2, H - 15);
+          
+          ctx.save();
+          ctx.translate(14, padT + ph / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textAlign = "center";
+          ctx.textBaseline = "top";
+          ctx.fillText(this.yLabel, 0, 0);
+          ctx.restore();
+          
+          ctx.restore();
+        }
+      }
+      
+      /* ============================================================================
+ * 5. Application State & Full-Duplex Audio Engine (Worklet + file:// Fallback)
+ * ============================================================================ */
+      const WORKLET_CODE = `
+      class FullDuplexProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this.mode = "idle";
+          this.sourceL = null;
+          this.sourceR = null;
+          this.cycleLen = 0;
+          this.playIdx = 0;
+          this.maxSamples = 0;
+          this.chunkL = new Float32Array(2048);
+          this.chunkFill = 0;
+          
+          this.port.onmessage = (e) => {
+            const msg = e.data;
+            if (msg.type === "start_cyclic") {
+              this.sourceL = msg.sourceL;
+              this.sourceR = msg.sourceR;
+              this.cycleLen = this.sourceL.length;
+              this.playIdx = 0;
+              this.maxSamples = msg.maxSamples;
+              this.chunkFill = 0;
+              this.mode = "cyclic";
+            } else if (msg.type === "start_memo") {
+              this.playIdx = 0;
+              this.maxSamples = msg.maxSamples;
+              this.chunkFill = 0;
+              this.mode = "memo";
+            } else if (msg.type === "stop") {
+              this.mode = "idle";
+            }
+          };
+        }
+        
+        process(inputs, outputs) {
+          const out = outputs[0];
+          const inCh = inputs[0];
+          const nFrames = out[0].length;
+          
+          if (this.mode === "idle") {
+            for (let c = 0; c < out.length; c++) out[c].fill(0);
+            return true;
+          }
+          
+          const hasIn = inCh && inCh.length > 0 && inCh[0].length === nFrames;
+          
+          for (let i = 0; i < nFrames; i++) {
+            if (this.playIdx >= this.maxSamples) {
+              if (this.chunkFill > 0) {
+                this.port.postMessage({ type: "data", samples: this.chunkL.slice(0, this.chunkFill) });
+                this.chunkFill = 0;
+              }
+              this.mode = "idle";
+              this.port.postMessage({ type: "finished" });
+              for (let c = 0; c < out.length; c++) out[c].fill(0, i);
+              return true;
+            }
+            
+            if (this.mode === "cyclic") {
+              const cIdx = this.playIdx % this.cycleLen;
+              out[0][i] = this.sourceL[cIdx];
+              if (out.length > 1) out[1][i] = this.sourceR[cIdx];
+            } else {
+              out[0][i] = 0;
+              if (out.length > 1) out[1][i] = 0;
+            }
+            
+            this.chunkL[this.chunkFill++] = hasIn ? inCh[0][i] : 0.0;
+            if (this.chunkFill >= this.chunkL.length) {
+              this.port.postMessage({ type: "data", samples: this.chunkL.slice(0) });
+              this.chunkFill = 0;
+            }
+            this.playIdx++;
+          }
+          return true;
+        }
+      }
+      registerProcessor("full-duplex-processor", FullDuplexProcessor);
+      `;
+      
+      const appState = {
+        sampleRate: 48000,
+        nChannelIn: 1,
+        nChannelOut: 2,
+        maximumDuration: 300,
+        workspaceDirHandle: null,
+        selectedInputDeviceId: "",
+        selectedOutputDeviceId: "",
+        
+        cyclicFileName: "",
+        cyclicData: null,
+        cyclicFs: 48000,
+        
+        impulseLength: 48000,
+        dataLength: 48000,
+        halfDataLength: 24000,
+        nFft: 48000,
+        fxImpulse: null,
+        fxxData: null,
+        gfStr6: null,
+        gfStr12: null,
+        bpfFc: 1000.0,
+        fc1kHzFilterF: null,
+        fcSliderFilterF: null,
+        
+        lastLtiSpec: null,
+        lastRtvSpec: null,
+        
+        audioCtx: null,
+        mediaStream: null,
+        workletNode: null,
+        streamingEnable: false,
+        streamTimer: null,
+        
+        unitSourceL: null,
+        unitSourceR: null,
+        capturedBuffer: null,
+        headIdx: 0,
+        firstTime: true,
+        initialSource: null,
+        initialCaptured: null,
+        
+        calInitialized: false,
+        ch1CalDb: 0.0,
+        ch1MeasuredSpl: 94.0,
+        calChunks: [],
+        calTimer: null,
+        calStartTime: 0,
+        
+        memoChunks: [],
+        memoTimer: null,
+        memoStartTime: 0,
+        memoBackupMsg: "",
+      };
+      
+      // Initialize Plots
+      const spectrumPlot = new ScientificPlot(document.getElementById("spectrumCanvas"), {
+          logX: true,
+          xRange: [20, 24000],
+          yRange: [-80, 20],
+          xLabel: "frequency (Hz)",
+          yLabel: "Level (rel. dB)",
+          title: "  ",
+          customMajorLogTicks: [
+          { f: 100, label: "100 Hz" },
+          { f: 1000, label: "1000 Hz" },
+          { f: 10000, label: "10000 Hz" },
+          ],
+          vLine: { x: 1000, label: "1000", color: "rgb(0, 180, 0)" },
+      });
+      
+      const bandSplPlot = new ScientificPlot(document.getElementById("bandSplCanvas"), {
+          logX: true,
+          xRange: [20, 24000],
+          yRange: [-110, 0],
+          xLabel: "frequency (Hz)",
+          yLabel: "SPL CAL.NO (dB)",
+          title: "Band SPL",
+          vLine: { x: 1000, label: "1000", color: "rgb(0, 180, 0)" },
+      });
+      
+      const powerRespPlot = new ScientificPlot(document.getElementById("powerRespCanvas"), {
+          logX: false,
+          xRange: [0, 1.0],
+          yRange: [-70, 0],
+          xLabel: "time (s)",
+          yLabel: "level (dB)",
+          title: "Power response",
+      });
+      
+      // UI Elements
+      const el = {
+        statusLabel: document.getElementById("statusLabel"),
+        ioDeviceLabel: document.getElementById("ioDeviceLabel"),
+        ioDeviceDropdown: document.getElementById("ioDeviceDropdown"),
+        outputDeviceDropdown: document.getElementById("outputDeviceDropdown"),
+        fsLabel: document.getElementById("fsLabel"),
+        fsDropdown: document.getElementById("fsDropdown"),
+        inChLabel: document.getElementById("inChLabel"),
+        inChDropdown: document.getElementById("inChDropdown"),
+        btnLoadCyclic: document.getElementById("btnLoadCyclic"),
+        cyclicFileInput: document.getElementById("cyclicFileInput"),
+        rbOutL: document.getElementById("rbOutL"),
+        rbOutR: document.getElementById("rbOutR"),
+        rbOutLR: document.getElementById("rbOutLR"),
+        rbRawDFT: document.getElementById("rbRawDFT"),
+        rbOct6th: document.getElementById("rbOct6th"),
+        rbOct12th: document.getElementById("rbOct12th"),
+        btnStart: document.getElementById("btnStart"),
+        btnStop: document.getElementById("btnStop"),
+        btnSnapshotGUI: document.getElementById("btnSnapshotGUI"),
+        btnSetFolder: document.getElementById("btnSetFolder"),
+        lblRecLamp: document.getElementById("lblRecLamp"),
+        recLamp: document.getElementById("recLamp"),
+        btnVoiceMemo: document.getElementById("btnVoiceMemo"),
+        btnCalibrate1: document.getElementById("btnCalibrate1"),
+        lblMeasuredSPL: document.getElementById("lblMeasuredSPL"),
+        measuredSPLDropdown: document.getElementById("measuredSPLDropdown"),
+        lblCalVal: document.getElementById("lblCalVal"),
+        calValSpin: document.getElementById("calValSpin"),
+        lblBpfSlider: document.getElementById("lblBpfSlider"),
+        bpfSlider: document.getElementById("bpfSlider"),
+        btnSnapshotLevel: document.getElementById("btnSnapshotLevel"),
+      };
+      
+      function setLampActive(active) {
+        el.recLamp.classList.toggle("active", active);
+        el.lblRecLamp.classList.toggle("disabled", !active);
+      }
+      
+      function initializeGraphics() {
+        const fs = appState.sampleRate;
+        const fx = new Float64Array([20, fs / 2]);
+        spectrumPlot.setCurve("lti", fx, new Float64Array([0, 0]), "rgb(0, 114, 189)", 2);
+        spectrumPlot.setCurve("rtv", fx, new Float64Array([-30, -30]), "rgb(217, 83, 25)", 2);
+        spectrumPlot.setCurve("sdti", fx, new Float64Array([-20, -20]), "rgb(237, 177, 32)", 2);
+        spectrumPlot.draw();
+        
+        bandSplPlot.setCurve("sig", fx, new Float64Array([0, 0]), "rgb(0, 114, 189)", 2);
+        bandSplPlot.setCurve("dist", fx, new Float64Array([-100, -100]), "rgb(217, 83, 25)", 2);
+        bandSplPlot.setCurve("ind", fx, new Float64Array([-100, -100]), "rgb(237, 177, 32)", 2);
+        bandSplPlot.setCurve("snap", fx, new Float64Array([-100, -100]), "rgb(0, 160, 0)", 2);
+        bandSplPlot.draw();
+        
+        const tx = new Float64Array([0, 1]);
+        powerRespPlot.setCurve("p1k", tx, new Float64Array([0, 0]), "rgb(0, 114, 189)", 2);
+        powerRespPlot.setCurve("pfc", tx, new Float64Array([0, 0]), "rgb(0, 180, 0)", 2);
+        powerRespPlot.draw();
+      }
+      initializeGraphics();
+      
+      /* ============================================================================
+ * 6. UI Event Handlers & Workflow
+ * ============================================================================ */
+      el.btnSetFolder.addEventListener("click", async () => {
+          if ("showDirectoryPicker" in window) {
+            try {
+              const baseHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+              if (typeof baseHandle.requestPermission === "function") {
+                await baseHandle.requestPermission({ mode: "readwrite" });
+              }
+              const subName = "acTest" + getTimestampStr();
+              appState.workspaceDirHandle = await baseHandle.getDirectoryHandle(subName, { create: true });
+            } catch (err) {
+              if (err.name === "AbortError") return;
+              console.warn("Directory picker error, falling back to browser downloads:", err);
+            }
+          }
+          el.btnSetFolder.disabled = true;
+          el.btnSnapshotGUI.disabled = false;
+          await populateAudioDevices();
+      });
+      
+      async function populateAudioDevices() {
+        try {
+          // Keep tempStream open while calling enumerateDevices() so Chrome on file://
+          // exposes full deviceIds and labels (and captures the active microphone label).
+          const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const activeTrack = tempStream.getAudioTracks()[0];
+          const activeLabel = activeTrack ? activeTrack.label : "";
+          
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          
+          // Stop the temporary stream after enumeration completes
+          tempStream.getTracks().forEach((t) => t.stop());
+          
+          const inputs = devices.filter((d) => d.kind === "audioinput");
+          const outputs = devices.filter((d) => d.kind === "audiooutput");
+          
+          el.ioDeviceDropdown.innerHTML = "";
+          if (inputs.length > 0) {
+            inputs.forEach((d, idx) => {
+                const opt = document.createElement("option");
+                // Guarantee a non-empty option value even if file:// masks deviceId
+                opt.value = d.deviceId && d.deviceId.length > 0 ? d.deviceId : "__default__";
+                opt.textContent =
+                d.label ||
+                (idx === 0 && activeLabel ? activeLabel : `Audio Input ${idx + 1}`);
+                el.ioDeviceDropdown.appendChild(opt);
+            });
+          } else {
+            const opt = document.createElement("option");
+            opt.value = "__default__";
+            opt.textContent = activeLabel || "Default Audio Input";
+            el.ioDeviceDropdown.appendChild(opt);
+          }
+          
+          const dashOpt = document.createElement("option");
+          dashOpt.value = "__none__";
+          dashOpt.textContent = " ---- ";
+          dashOpt.selected = true;
+          el.ioDeviceDropdown.appendChild(dashOpt);
+          
+          el.outputDeviceDropdown.innerHTML = "";
+          const validOutputs = outputs.filter((d) => d.deviceId || d.label);
+          if (validOutputs.length > 0) {
+            validOutputs.forEach((d, idx) => {
+                const opt = document.createElement("option");
+                opt.value = d.deviceId || "default";
+                opt.textContent = `Out: ${d.label || `Speaker ${idx + 1}`}`;
+                el.outputDeviceDropdown.appendChild(opt);
+            });
+            el.outputDeviceDropdown.disabled = false;
+          } else {
+            const opt = document.createElement("option");
+            opt.value = "default";
+            opt.textContent = "Out: System Default";
+            el.outputDeviceDropdown.appendChild(opt);
+            el.outputDeviceDropdown.disabled = true;
+          }
+          
+          el.ioDeviceDropdown.disabled = false;
+          el.ioDeviceLabel.classList.remove("disabled");
+          el.statusLabel.textContent = "Select IO device";
+        } catch (err) {
+          alert("Microphone permission is required for acoustic measurement: " + err.message);
+        }
+      }
+      
+      el.ioDeviceDropdown.addEventListener("change", () => {
+          const val = el.ioDeviceDropdown.value;
+          if (!val || val === "__none__") return;
+          appState.selectedInputDeviceId = val === "__default__" ? "" : val;
+          const outVal = el.outputDeviceDropdown.value;
+          appState.selectedOutputDeviceId = outVal && outVal !== "default" ? outVal : "";
+          
+          const selectedText =
+          el.ioDeviceDropdown.options[el.ioDeviceDropdown.selectedIndex]?.text || "";
+          
+          const candidateRates = [8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000];
+          el.fsDropdown.innerHTML = "";
+          candidateRates.forEach((r) => {
+              const opt = document.createElement("option");
+              opt.value = String(r);
+              opt.textContent = String(r);
+              el.fsDropdown.appendChild(opt);
+          });
+          const dash = document.createElement("option");
+          dash.value = "";
+          dash.textContent = " ---- ";
+          dash.selected = true;
+          el.fsDropdown.appendChild(dash);
+          
+          el.ioDeviceDropdown.disabled = true;
+          el.outputDeviceDropdown.disabled = true;
+          el.fsDropdown.disabled = false;
+          el.fsLabel.classList.remove("disabled");
+          el.rbOutL.disabled = false;
+          el.rbOutR.disabled = false;
+          el.rbOutLR.disabled = false;
+          el.statusLabel.textContent = `Selected: ${selectedText}. Select Sampling frequency`;
+      });
+      
+      el.outputDeviceDropdown.addEventListener("change", () => {
+          const outVal = el.outputDeviceDropdown.value;
+          appState.selectedOutputDeviceId = outVal && outVal !== "default" ? outVal : "";
+      });
+      
+      el.fsDropdown.addEventListener("change", () => {
+          const r = parseInt(el.fsDropdown.value, 10);
+          if (!r) return;
+          appState.sampleRate = r;
+          el.fsDropdown.disabled = true;
+          el.inChDropdown.disabled = false;
+          el.inChLabel.classList.remove("disabled");
+          el.statusLabel.textContent = "Select Number of Input Channels";
+      });
+      
+      el.inChDropdown.addEventListener("change", () => {
+          const nCh = parseInt(el.inChDropdown.value, 10);
+          if (nCh > 0) {
+            appState.nChannelIn = nCh;
+            el.inChDropdown.disabled = true;
+            el.btnLoadCyclic.disabled = false;
+            el.rbRawDFT.disabled = false;
+            el.rbOct6th.disabled = false;
+            el.rbOct12th.disabled = false;
+            el.btnVoiceMemo.disabled = false;
+            el.statusLabel.textContent = "Ready to load cyclic data";
+          }
+      });
+      
+      // Load Cyclic WAV File
+      el.btnLoadCyclic.addEventListener("click", () => {
+          el.cyclicFileInput.value = "";
+          el.cyclicFileInput.click();
+      });
+      
+      el.cyclicFileInput.addEventListener("change", async (ev) => {
+          const file = ev.target.files[0];
+          if (!file) return;
+          
+          try {
+            const arrayBuf = await file.arrayBuffer();
+            const wavInfo = decodeWavFile(arrayBuf);
+            let xMono, fs;
+            if (wavInfo) {
+              xMono = wavInfo.channel0;
+              fs = wavInfo.sampleRate;
+            } else {
+              const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+              const decoded = await tmpCtx.decodeAudioData(arrayBuf);
+              fs = decoded.sampleRate;
+              const ch0 = decoded.getChannelData(0);
+              xMono = new Float64Array(ch0.length);
+              for (let i = 0; i < ch0.length; i++) xMono[i] = ch0[i];
+              await tmpCtx.close();
+            }
+            
+            if (xMono.length === 0) {
+              alert("Selected audio file is empty.");
+              return;
+            }
+            
+            appState.cyclicFileName = file.name;
+            appState.cyclicData = xMono;
+            appState.cyclicFs = fs;
+            appState.sampleRate = fs;
+            el.fsDropdown.value = String(fs);
+            
+            spectrumPlot.title = "File: " + file.name;
+            appState.impulseLength = Math.min(fs, Math.floor(xMono.length / 3));
+            appState.dataLength = xMono.length;
+            appState.halfDataLength = Math.floor(xMono.length / 2);
+            
+            const fftl = appState.impulseLength;
+            appState.fxImpulse = new Float64Array(fftl);
+            for (let i = 0; i < fftl; i++) appState.fxImpulse[i] = (i / fftl) * fs;
+            
+            appState.fxxData = new Float64Array(appState.dataLength);
+            for (let i = 0; i < appState.dataLength; i++) appState.fxxData[i] = (i / appState.dataLength) * fs;
+            
+            appState.gfStr6 = constantQGaussBPFWeight(appState.fxImpulse, 1.0 / 3.0, 1.0 / 24.0);
+            appState.gfStr12 = constantQGaussBPFWeight(appState.fxImpulse, 1.0 / 12.0, 1.0 / 24.0);
+            
+            appState.bpfFc = 1000.0;
+            const tmpBpf = designFcOctaveSet(1000.0);
+            appState.fc1kHzFilterF = tmpBpf;
+            appState.fcSliderFilterF = tmpBpf;
+            appState.lastLtiSpec = null;
+            appState.lastRtvSpec = null;
+            
+            updateGraphicsAxes();
+            el.statusLabel.textContent = "Ready to START";
+            el.btnStart.disabled = false;
+          } catch (err) {
+            alert("Failed to decode audio file: " + err.message);
+          }
+      });
+      
+      function decodeWavFile(arrayBuffer) {
+        const view = new DataView(arrayBuffer);
+        if (view.byteLength < 44) return null;
+        const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+        const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
+        if (riff !== "RIFF" || wave !== "WAVE") return null;
+        
+        let offset = 12;
+        let audioFormat = 1, numChannels = 1, sampleRate = 48000, bitsPerSample = 16;
+        let dataOffset = -1, dataSize = 0;
+        
+        while (offset + 8 <= view.byteLength) {
+          const id = String.fromCharCode(
+            view.getUint8(offset), view.getUint8(offset + 1),
+            view.getUint8(offset + 2), view.getUint8(offset + 3)
+          );
+          const size = view.getUint32(offset + 4, true);
+          if (id === "fmt ") {
+            audioFormat = view.getUint16(offset + 8, true);
+            numChannels = view.getUint16(offset + 10, true);
+            sampleRate = view.getUint32(offset + 12, true);
+            bitsPerSample = view.getUint16(offset + 22, true);
+          } else if (id === "data") {
+            dataOffset = offset + 8;
+            dataSize = size;
+            break;
+          }
+          offset += 8 + size + (size & 1);
+        }
+        if (dataOffset < 0) return null;
+        
+        const bytesPerSample = bitsPerSample / 8;
+        const nFrames = Math.floor(dataSize / (numChannels * bytesPerSample));
+        const ch0 = new Float64Array(nFrames);
+        let ptr = dataOffset;
+        
+        for (let i = 0; i < nFrames; i++) {
+          if (audioFormat === 3 && bitsPerSample === 32) {
+            ch0[i] = view.getFloat32(ptr, true);
+          } else if (bitsPerSample === 16) {
+            ch0[i] = view.getInt16(ptr, true) / 32768.0;
+          } else if (bitsPerSample === 24) {
+            let b0 = view.getUint8(ptr), b1 = view.getUint8(ptr + 1), b2 = view.getUint8(ptr + 2);
+            let val = b0 | (b1 << 8) | (b2 << 16);
+            if (val & 0x800000) val -= 0x1000000;
+            ch0[i] = val / 8388608.0;
+          } else if (bitsPerSample === 32) {
+            ch0[i] = view.getInt32(ptr, true) / 2147483648.0;
+          }
+          ptr += numChannels * bytesPerSample;
+        }
+        return { sampleRate, channel0: ch0 };
+      }
+      
+      function designFcOctaveSet(fc) {
+        const fcSet = appState.gfStr12.fcSet;
+        const nBands = fcSet.length;
+        let idxFc = 0, minDiff = Infinity;
+        for (let i = 0; i < nBands; i++) {
+          const d = Math.abs(fc - fcSet[i]);
+          if (d < minDiff) { minDiff = d; idxFc = i; }
+        }
+        const cols = [];
+        for (let k = -11; k <= 11; k++) {
+          const bIdx = Math.max(0, Math.min(nBands - 1, idxFc + k));
+          cols.push(appState.gfStr12.quadByChannel[bIdx]);
+        }
+        return cols;
+      }
+      
+      function updateGraphicsAxes() {
+        const fs = appState.sampleRate;
+        spectrumPlot.xRange = [20, fs / 2];
+        bandSplPlot.xRange = [20, fs / 2];
+        
+        // Move initial placeholder lines to match MATLAB updateGraphics (sdti -> -120 dB)
+        const fx = new Float64Array([20, fs / 2]);
+        spectrumPlot.setCurve("lti", fx, new Float64Array([0, 0]), "rgb(0, 114, 189)", 2);
+        spectrumPlot.setCurve("rtv", fx, new Float64Array([-30, -30]), "rgb(217, 83, 25)", 2);
+        spectrumPlot.setCurve("sdti", fx, new Float64Array([-120, -120]), "rgb(237, 177, 32)", 2);
+        
+        bandSplPlot.setCurve("sig", fx, new Float64Array([0, 0]), "rgb(0, 114, 189)", 2);
+        bandSplPlot.setCurve("dist", fx, new Float64Array([-200, -200]), "rgb(217, 83, 25)", 2);
+        bandSplPlot.setCurve("ind", fx, new Float64Array([-200, -200]), "rgb(237, 177, 32)", 2);
+        bandSplPlot.setCurve("snap", fx, new Float64Array([-200, -200]), "rgb(0, 160, 0)", 2);
+        
+        const fcSet = appState.gfStr12.fcSet;
+        const nBands = fcSet.length;
+        let idx1k = 0, minDiff = Infinity;
+        for (let i = 0; i < nBands; i++) {
+          const d = Math.abs(fcSet[i] - 1000.0);
+          if (d < minDiff) { minDiff = d; idx1k = i; }
+        }
+        const minIdx = Math.min(11, nBands - 1);
+        const maxIdx = Math.max(minIdx, nBands - 12);
+        el.bpfSlider.min = String(minIdx);
+        el.bpfSlider.max = String(maxIdx);
+        el.bpfSlider.value = String(Math.max(minIdx, Math.min(maxIdx, idx1k)));
+        el.bpfSlider.disabled = false;
+        
+        spectrumPlot.draw();
+        bandSplPlot.draw();
+        powerRespPlot.draw();
+      }
+      
+      el.bpfSlider.addEventListener("input", () => {
+          if (!appState.gfStr12) return;
+          const fcSet = appState.gfStr12.fcSet;
+          const idx = Math.max(0, Math.min(fcSet.length - 1, parseInt(el.bpfSlider.value, 10)));
+          const fc = fcSet[idx];
+          appState.bpfFc = fc;
+          const fcStr = Math.round(fc).toString();
+          el.lblBpfSlider.textContent = `BPF fc: ${fcStr} Hz`;
+          
+          spectrumPlot.vLine = { x: fc, label: fcStr, color: "rgb(0, 180, 0)" };
+          bandSplPlot.vLine = { x: fc, label: fcStr, color: "rgb(0, 180, 0)" };
+          appState.fcSliderFilterF = designFcOctaveSet(fc);
+          
+          if (appState.lastLtiSpec) {
+            updatePowerDecayPlot(appState.lastLtiSpec);
+          }
+          spectrumPlot.draw();
+          bandSplPlot.draw();
+      });
+      
+      [el.rbRawDFT, el.rbOct6th, el.rbOct12th].forEach((rb) => {
+          rb.addEventListener("change", () => {
+              updateTransferFunctionDisplay();
+              spectrumPlot.draw();
+          });
+      });
+      
+      /* ============================================================================
+ * 7. Full-Duplex Audio Setup & Real-Time Giant-FFT Analysis Loop
+ * ============================================================================ */
+      async function initAudioEngine() {
+        await closeAudioEngine();
+        const fs = appState.sampleRate;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        appState.audioCtx = new AudioCtx({ sampleRate: fs, latencyHint: "interactive" });
+        
+        if (appState.selectedOutputDeviceId && typeof appState.audioCtx.setSinkId === "function") {
+          try { await appState.audioCtx.setSinkId(appState.selectedOutputDeviceId); } catch (e) {}
+        }
+        
+        const audioConstraints = {
+          sampleRate: fs,
+          channelCount: { ideal: appState.nChannelIn },
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        };
+        if (appState.selectedInputDeviceId && appState.selectedInputDeviceId !== "default") {
+          audioConstraints.deviceId = { exact: appState.selectedInputDeviceId };
+        }
+        
+        appState.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+        const micSource = appState.audioCtx.createMediaStreamSource(appState.mediaStream);
+        
+        // Try AudioWorklet with a data: URI first; fall back to ScriptProcessorNode on strict file:// origins
+        let useWorklet = false;
+        if (appState.audioCtx.audioWorklet) {
+          try {
+            const dataUrl = "data:text/javascript;base64," + btoa(WORKLET_CODE);
+            await appState.audioCtx.audioWorklet.addModule(dataUrl);
+            appState.workletNode = new AudioWorkletNode(appState.audioCtx, "full-duplex-processor", {
+                numberOfInputs: 1,
+                numberOfOutputs: 1,
+                outputChannelCount: [2],
+            });
+            micSource.connect(appState.workletNode);
+            appState.workletNode.connect(appState.audioCtx.destination);
+            useWorklet = true;
+          } catch (workletErr) {
+            console.warn("AudioWorklet blocked on file:// origin, using ScriptProcessor fallback:", workletErr);
+          }
+        }
+        
+        if (!useWorklet) {
+          // Compatible fallback that works on Safari/Chrome/Edge even when opened via file://
+          const spNode = appState.audioCtx.createScriptProcessor(2048, 1, 2);
+          const state = {
+            mode: "idle",
+            sourceL: null,
+            sourceR: null,
+            cycleLen: 0,
+            playIdx: 0,
+            maxSamples: 0,
+            onmessage: null,
+          };
+          
+          spNode.port = {
+            set onmessage(fn) { state.onmessage = fn; },
+            get onmessage() { return state.onmessage; },
+            postMessage(msg) {
+              if (msg.type === "start_cyclic") {
+                state.sourceL = msg.sourceL;
+                state.sourceR = msg.sourceR;
+                state.cycleLen = msg.sourceL.length;
+                state.playIdx = 0;
+                state.maxSamples = msg.maxSamples;
+                state.mode = "cyclic";
+              } else if (msg.type === "start_memo") {
+                state.playIdx = 0;
+                state.maxSamples = msg.maxSamples;
+                state.mode = "memo";
+              } else if (msg.type === "stop") {
+                state.mode = "idle";
+              }
+            },
+          };
+          
+          spNode.onaudioprocess = (ev) => {
+            const outL = ev.outputBuffer.getChannelData(0);
+            const outR = ev.outputBuffer.numberOfChannels > 1 ? ev.outputBuffer.getChannelData(1) : outL;
+            const inL = ev.inputBuffer.getChannelData(0);
+            const nFrames = outL.length;
+            
+            if (state.mode === "idle") {
+              outL.fill(0);
+              outR.fill(0);
+              return;
+            }
+            
+            const recorded = new Float32Array(nFrames);
+            let count = 0;
+            
+            for (let i = 0; i < nFrames; i++) {
+              if (state.playIdx >= state.maxSamples) {
+                if (count > 0 && state.onmessage) {
+                  state.onmessage({ data: { type: "data", samples: recorded.slice(0, count) } });
+                }
+                state.mode = "idle";
+                if (state.onmessage) state.onmessage({ data: { type: "finished" } });
+                outL.fill(0, i);
+                outR.fill(0, i);
+                return;
+              }
+              
+              if (state.mode === "cyclic") {
+                const cIdx = state.playIdx % state.cycleLen;
+                outL[i] = state.sourceL[cIdx];
+                outR[i] = state.sourceR[cIdx];
+              } else {
+                outL[i] = 0;
+                outR[i] = 0;
+              }
+              
+              recorded[count++] = inL[i];
+              state.playIdx++;
+            }
+            
+            if (count > 0 && state.onmessage) {
+              state.onmessage({ data: { type: "data", samples: recorded.slice(0, count) } });
+            }
+          };
+          
+          micSource.connect(spNode);
+          spNode.connect(appState.audioCtx.destination);
+          appState.workletNode = spNode;
+        }
+        
+        if (appState.audioCtx.state === "suspended") {
+          await appState.audioCtx.resume();
+        }
+      }
+      
+      async function closeAudioEngine() {
+        if (appState.workletNode) {
+          try {
+            if (appState.workletNode.port) appState.workletNode.port.postMessage({ type: "stop" });
+            appState.workletNode.onaudioprocess = null;
+            appState.workletNode.disconnect();
+          } catch (e) {}
+          appState.workletNode = null;
+        }
+        if (appState.mediaStream) {
+          appState.mediaStream.getTracks().forEach((t) => t.stop());
+          appState.mediaStream = null;
+        }
+        if (appState.audioCtx) {
+          try { await appState.audioCtx.close(); } catch (e) {}
+          appState.audioCtx = null;
+        }
+      }
+      
+      function prepareOutputUnitChannels(unitMono) {
+        const n = unitMono.length;
+        const outL = new Float32Array(n);
+        const outR = new Float32Array(n);
+        const useL = el.rbOutL.checked || el.rbOutLR.checked;
+        const useR = el.rbOutR.checked || el.rbOutLR.checked;
+        for (let i = 0; i < n; i++) {
+          outL[i] = useL ? unitMono[i] : 0.0;
+          outR[i] = useR ? unitMono[i] : 0.0;
+        }
+        return { outL, outR };
+      }
+      
+      el.btnStart.addEventListener("click", async () => {
+          if (!appState.cyclicData) return;
+          el.btnVoiceMemo.disabled = true;
+          
+          try {
+            await initAudioEngine();
+          } catch (err) {
+            alert("Cannot start Web Audio stream: " + err.message);
+            el.btnVoiceMemo.disabled = false;
+            return;
+          }
+          
+          const fs = appState.sampleRate;
+          const { outL, outR } = prepareOutputUnitChannels(appState.cyclicData);
+          appState.unitSourceL = outL;
+          appState.unitSourceR = outR;
+          
+          const cycleLen = appState.cyclicData.length;
+          appState.nFft = cycleLen;
+          const nCycles = Math.max(1, Math.floor((appState.maximumDuration * fs) / cycleLen));
+          const totalSamples = nCycles * cycleLen;
+          
+          appState.capturedBuffer = new Float32Array(totalSamples);
+          appState.headIdx = 0;
+          appState.firstTime = true;
+          appState.streamingEnable = true;
+          
+          appState.workletNode.port.onmessage = (e) => {
+            const msg = e.data;
+            if (msg.type === "data") {
+              const chunk = msg.samples;
+              const rem = appState.capturedBuffer.length - appState.headIdx;
+              const nCopy = Math.min(chunk.length, rem);
+              if (nCopy > 0) {
+                appState.capturedBuffer.set(chunk.subarray(0, nCopy), appState.headIdx);
+                appState.headIdx += nCopy;
+              }
+            } else if (msg.type === "finished") {
+              stopStreamAndSave();
+            }
+          };
+          
+          appState.workletNode.port.postMessage({
+              type: "start_cyclic",
+              sourceL: outL,
+              sourceR: outR,
+              maxSamples: totalSamples,
+          });
+          
+          el.statusLabel.textContent = "Streaming";
+          el.btnStart.disabled = true;
+          el.btnStop.disabled = false;
+          el.btnLoadCyclic.disabled = true;
+          el.rbOutL.disabled = true;
+          el.rbOutR.disabled = true;
+          el.rbOutLR.disabled = true;
+          el.btnSnapshotLevel.disabled = false;
+          
+          appState.streamTimer = setInterval(analysisAndUpdateGraphicsHandler, 100);
+      });
+      
+      function analysisAndUpdateGraphicsHandler() {
+        if (!appState.streamingEnable) return;
+        const cycleLen = appState.nFft;
+        const currHead = appState.headIdx;
+        if (currHead < cycleLen) return;
+        
+        const fs = appState.sampleRate;
+        const fxx = appState.fxxData;
+        const fxImpulse = appState.fxImpulse;
+        const fcSet = appState.gfStr6.fcSet;
+        const nBands6 = fcSet.length;
+        
+        const fcSetL = new Float64Array(nBands6);
+        const fcSetH = new Float64Array(nBands6);
+        const invSqrt2 = Math.pow(2.0, -0.5);
+        const sqrt2 = Math.pow(2.0, 0.5);
+        for (let i = 0; i < nBands6; i++) {
+          fcSetL[i] = fcSet[i] * invSqrt2;
+          fcSetH[i] = fcSet[i] * sqrt2;
+        }
+        
+        const startIdx = currHead - cycleLen;
+        const unitRef = el.rbOutR.checked ? appState.unitSourceR : appState.unitSourceL;
+        const sourceSeg = new Float64Array(cycleLen);
+        const capturedRaw = new Float64Array(cycleLen);
+        
+        for (let i = 0; i < cycleLen; i++) {
+          sourceSeg[i] = unitRef[(startIdx + i) % cycleLen];
+          capturedRaw[i] = appState.capturedBuffer[startIdx + i];
+        }
+        
+        let capturedSeg;
+        if (appState.firstTime) {
+          capturedSeg = new Float64Array(sourceSeg);
+          appState.initialSource = new Float64Array(sourceSeg);
+          appState.initialCaptured = new Float64Array(capturedRaw);
+          appState.firstTime = false;
+        } else {
+          capturedSeg = capturedRaw;
+        }
+        
+        const epsSpec = 1e-12;
+        const capFft = fftGeneral(capturedSeg, null, false);
+        const capturedPower = new Float64Array(cycleLen);
+        const cumCapPw = new Float64Array(cycleLen);
+        const invN2 = 1.0 / (cycleLen * cycleLen);
+        let runSum = 0.0;
+        for (let i = 0; i < cycleLen; i++) {
+          const p = (capFft.re[i] * capFft.re[i] + capFft.im[i] * capFft.im[i]) * invN2;
+          capturedPower[i] = p;
+          runSum += p;
+          cumCapPw[i] = runSum;
+        }
+        
+        const capH = interp1LinearExtrap(fxx, cumCapPw, fcSetH);
+        const capL = interp1LinearExtrap(fxx, cumCapPw, fcSetL);
+        const octaveBandLevel = new Float64Array(nBands6);
+        for (let i = 0; i < nBands6; i++) {
+          octaveBandLevel[i] = Math.max(capH[i] - capL[i], epsSpec);
+        }
+        
+        const srcEps = new Float64Array(cycleLen);
+        for (let i = 0; i < cycleLen; i++) srcEps[i] = sourceSeg[i] + epsSpec;
+        const srcFft = fftGeneral(srcEps, null, false);
+        
+        const tfRe = new Float64Array(cycleLen);
+        const tfIm = new Float64Array(cycleLen);
+        for (let i = 0; i < cycleLen; i++) {
+          const cr = capFft.re[i], ci = capFft.im[i];
+          const sr = srcFft.re[i], si = srcFft.im[i];
+          const denom = Math.max(sr * sr + si * si, 1e-30);
+          tfRe[i] = (cr * sr + ci * si) / denom;
+          tfIm[i] = (ci * sr - cr * si) / denom;
+        }
+        
+        const impComplex = fftGeneral(tfRe, tfIm, true);
+        const impulseResp = impComplex.re;
+        
+        const fftl = appState.impulseLength;
+        const nImp = impulseResp.length;
+        let idxPeak = 0, maxAbs = -1.0;
+        for (let i = 0; i < nImp; i++) {
+          const a = Math.abs(impulseResp[i]);
+          if (a > maxAbs) { maxAbs = a; idxPeak = i; }
+        }
+        
+        const biasL = appState.halfDataLength;
+        const indOffset = idxPeak + Math.floor(fs * 0.015 + 0.5);
+        
+        const ltiSeg = new Float64Array(fftl);
+        const indSeg = new Float64Array(fftl);
+        const rtvSeg = new Float64Array(fftl);
+        for (let i = 0; i < fftl; i++) {
+          ltiSeg[i] = impulseResp[i];
+          indSeg[i] = impulseResp[(i + indOffset) % nImp];
+          rtvSeg[i] = impulseResp[(i + biasL) % nImp];
+        }
+        
+        const ltiSpec = fftGeneral(ltiSeg, null, false);
+        const indSpec = fftGeneral(indSeg, null, false);
+        const rtvSpec = fftGeneral(rtvSeg, null, false);
+        
+        appState.lastLtiSpec = ltiSpec;
+        appState.lastRtvSpec = rtvSpec;
+        
+        const cumLti = new Float64Array(fftl);
+        const cumInd = new Float64Array(fftl);
+        const cumRtv = new Float64Array(fftl);
+        let sLti = 0, sInd = 0, sRtv = 0;
+        for (let i = 0; i < fftl; i++) {
+          sLti += ltiSpec.re[i] * ltiSpec.re[i] + ltiSpec.im[i] * ltiSpec.im[i];
+          sInd += indSpec.re[i] * indSpec.re[i] + indSpec.im[i] * indSpec.im[i];
+          sRtv += rtvSpec.re[i] * rtvSpec.re[i] + rtvSpec.im[i] * rtvSpec.im[i];
+          cumLti[i] = sLti;
+          cumInd[i] = sInd;
+          cumRtv[i] = sRtv;
+        }
+        
+        const ltiH = interp1LinearExtrap(fxImpulse, cumLti, fcSetH);
+        const ltiL = interp1LinearExtrap(fxImpulse, cumLti, fcSetL);
+        const rtvH = interp1LinearExtrap(fxImpulse, cumRtv, fcSetH);
+        const rtvL = interp1LinearExtrap(fxImpulse, cumRtv, fcSetL);
+        const indH = interp1LinearExtrap(fxImpulse, cumInd, fcSetH);
+        const indL = interp1LinearExtrap(fxImpulse, cumInd, fcSetL);
+        
+        const octBandDb = new Float64Array(nBands6);
+        const distBandDb = new Float64Array(nBands6);
+        const indBandDb = new Float64Array(nBands6);
+        
+        for (let i = 0; i < nBands6; i++) {
+          const oLti = Math.max(ltiH[i] - ltiL[i], epsSpec);
+          const oRtv = Math.max(rtvH[i] - rtvL[i], epsSpec);
+          const oInd = Math.max(indH[i] - indL[i], epsSpec);
+          const relRtvDb = 10.0 * Math.log10(oRtv / oLti);
+          const relIndDb = 10.0 * Math.log10(oInd / oLti);
+          const sigDb = 10.0 * Math.log10(octaveBandLevel[i]) + appState.ch1CalDb + 3.0;
+          octBandDb[i] = sigDb;
+          distBandDb[i] = sigDb + relRtvDb;
+          indBandDb[i] = sigDb + relIndDb;
+        }
+        
+        updateTransferFunctionDisplay();
+        spectrumPlot.draw();
+        
+        bandSplPlot.setCurve("sig", fcSet, octBandDb, "rgb(0, 114, 189)", 2);
+        bandSplPlot.setCurve("dist", fcSet, distBandDb, "rgb(217, 83, 25)", 2);
+        bandSplPlot.setCurve("ind", fcSet, indBandDb, "rgb(237, 177, 32)", 2);
+        bandSplPlot.draw();
+        
+        updatePowerDecayPlot(ltiSpec);
+      }
+      
+      function updateTransferFunctionDisplay() {
+        if (!appState.lastLtiSpec || !appState.lastRtvSpec) return;
+        const ltiSpec = appState.lastLtiSpec;
+        const rtvSpec = appState.lastRtvSpec;
+        const fftl = appState.impulseLength;
+        const epsSpec = 1e-12;
+        
+        const ltiPw = new Float64Array(fftl);
+        const rtvPw = new Float64Array(fftl);
+        for (let i = 0; i < fftl; i++) {
+          ltiPw[i] = ltiSpec.re[i] * ltiSpec.re[i] + ltiSpec.im[i] * ltiSpec.im[i];
+          rtvPw[i] = rtvSpec.re[i] * rtvSpec.re[i] + rtvSpec.im[i] * rtvSpec.im[i];
+        }
+        
+        let freqAxis, ltiGain, rtvGain;
+        if (el.rbRawDFT.checked) {
+          freqAxis = appState.fxImpulse;
+          ltiGain = new Float64Array(fftl);
+          rtvGain = new Float64Array(fftl);
+          for (let i = 0; i < fftl; i++) {
+            ltiGain[i] = 10.0 * Math.log10(Math.max(ltiPw[i], epsSpec * epsSpec));
+            rtvGain[i] = 10.0 * Math.log10(Math.max(rtvPw[i], epsSpec * epsSpec));
+          }
+        } else {
+          const gf = el.rbOct6th.checked ? appState.gfStr6 : appState.gfStr12;
+          freqAxis = gf.fcSet;
+          const nCh = gf.nChannel;
+          ltiGain = new Float64Array(nCh);
+          rtvGain = new Float64Array(nCh);
+          for (let ch = 0; ch < nCh; ch++) {
+            const w = gf.filterWeight[ch];
+            let sumL = 0.0, sumR = 0.0;
+            for (let i = 0; i < fftl; i++) {
+              sumL += w[i] * ltiPw[i];
+              sumR += w[i] * rtvPw[i];
+            }
+            ltiGain[ch] = 10.0 * Math.log10(Math.max(sumL, epsSpec));
+            rtvGain[ch] = 10.0 * Math.log10(Math.max(sumR, epsSpec));
+          }
+        }
+        
+        spectrumPlot.setCurve("lti", freqAxis, ltiGain, "rgb(0, 114, 189)", 2);
+        spectrumPlot.setCurve("rtv", freqAxis, rtvGain, "rgb(217, 83, 25)", 2);
+      }
+      
+      function computeFilteredPowerDecay(filterCols, ltiSpec, fftl, fs) {
+        const nDec = Math.ceil(fftl / 10);
+        const pSum = new Float64Array(nDec);
+        const tmpRe = new Float64Array(fftl);
+        const tmpIm = new Float64Array(fftl);
+        
+        for (let c = 0; c < filterCols.length; c++) {
+          const wCol = filterCols[c];
+          for (let i = 0; i < fftl; i++) {
+            tmpRe[i] = wCol[i] * ltiSpec.re[i];
+            tmpIm[i] = wCol[i] * ltiSpec.im[i];
+          }
+          const resp = fftGeneral(tmpRe, tmpIm, true);
+          for (let k = 0, idx = 0; idx < fftl; k++, idx += 10) {
+            pSum[k] += resp.re[idx] * resp.re[idx] + resp.im[idx] * resp.im[idx];
+          }
+        }
+        
+        let maxDb = -Infinity;
+        const dbArr = new Float64Array(nDec);
+        const txArr = new Float64Array(nDec);
+        for (let k = 0; k < nDec; k++) {
+          txArr[k] = (k * 10 + 1) / fs;
+          const d = 10.0 * Math.log10(Math.max(pSum[k], 1e-12));
+          dbArr[k] = d;
+          if (d > maxDb) maxDb = d;
+        }
+        for (let k = 0; k < nDec; k++) dbArr[k] -= maxDb;
+        return { txArr, dbArr };
+      }
+      
+      function updatePowerDecayPlot(ltiSpec) {
+        const fftl = appState.impulseLength;
+        const fs = appState.sampleRate;
+        const r1k = computeFilteredPowerDecay(appState.fc1kHzFilterF, ltiSpec, fftl, fs);
+        const rFc = computeFilteredPowerDecay(appState.fcSliderFilterF, ltiSpec, fftl, fs);
+        
+        powerRespPlot.setCurve("p1k", r1k.txArr, r1k.dbArr, "rgb(0, 114, 189)", 2);
+        powerRespPlot.setCurve("pfc", rFc.txArr, rFc.dbArr, "rgb(0, 180, 0)", 2);
+        powerRespPlot.draw();
+      }
+      
+      el.btnStop.addEventListener("click", () => {
+          stopStreamAndSave();
+      });
+      
+      async function stopStreamAndSave() {
+        if (!appState.streamingEnable) return;
+        appState.streamingEnable = false;
+        if (appState.streamTimer) {
+          clearInterval(appState.streamTimer);
+          appState.streamTimer = null;
+        }
+        await closeAudioEngine();
+        
+        el.btnSnapshotLevel.disabled = true;
+        if (!appState.calInitialized) {
+          el.btnCalibrate1.disabled = false;
+          appState.calInitialized = true;
+        }
+        
+        el.statusLabel.textContent = "Stopped: START or Select another file.";
+        el.btnStop.disabled = true;
+        el.btnStart.disabled = false;
+        el.btnLoadCyclic.disabled = false;
+        el.btnVoiceMemo.disabled = false;
+        el.rbOutL.disabled = false;
+        el.rbOutR.disabled = false;
+        el.rbOutLR.disabled = false;
+        
+        const tstr = getTimestampStr();
+        if (appState.initialSource && appState.initialCaptured) {
+          const bSrc = encodeWav24Bit([appState.initialSource], 1, appState.sampleRate);
+          const bCap = encodeWav24Bit([appState.initialCaptured], 1, appState.sampleRate);
+          await saveBlobToWorkspace(appState.workspaceDirHandle, `initialSourceAT${tstr}r.wav`, bSrc);
+          await saveBlobToWorkspace(appState.workspaceDirHandle, `initialCapturedAT${tstr}r.wav`, bCap);
+        }
+        
+        if (appState.headIdx > 0 && appState.capturedBuffer) {
+          const nFrames = appState.headIdx;
+          const cycleLen = appState.unitSourceL.length;
+          const fullSrcL = new Float32Array(nFrames);
+          const fullSrcR = new Float32Array(nFrames);
+          for (let i = 0; i < nFrames; i++) {
+            fullSrcL[i] = appState.unitSourceL[i % cycleLen];
+            fullSrcR[i] = appState.unitSourceR[i % cycleLen];
+          }
+          const bWholeSrc = encodeWav24Bit([fullSrcL, fullSrcR], 2, appState.sampleRate);
+          const bWholeCap = encodeWav24Bit([appState.capturedBuffer.subarray(0, nFrames)], 1, appState.sampleRate);
+          await saveBlobToWorkspace(appState.workspaceDirHandle, `sourceAT${tstr}r.wav`, bWholeSrc);
+          await saveBlobToWorkspace(appState.workspaceDirHandle, `capturedAT${tstr}r.wav`, bWholeCap);
+        }
+      }
+      
+      /* ============================================================================
+ * 8. Calibration, Voice Memo, and Full-GUI Snapshots
+ * ============================================================================ */
+      function generateCalibrationSignal() {
+        const fs = appState.sampleRate;
+        const fLow = Math.round(1000.0 * Math.pow(2.0, -0.5));
+        const fHigh = Math.round(1000.0 * Math.pow(2.0, 0.5));
+        const nSines = fHigh - fLow + 1;
+        const phases = new Float64Array(nSines);
+        for (let k = 0; k < nSines; k++) phases[k] = Math.random() * 2.0 * Math.PI;
+        
+        const x = new Float64Array(fs);
+        let sum = 0.0, sumSq = 0.0;
+        for (let i = 0; i < fs; i++) {
+          const t = (i + 1) / fs;
+          let s = 0.0;
+          for (let k = 0; k < nSines; k++) {
+            s += Math.sin(2.0 * Math.PI * (fLow + k) * t + phases[k]);
+          }
+          x[i] = s;
+          sum += s;
+          sumSq += s * s;
+        }
+        const mean = sum / fs;
+        const std = Math.sqrt((sumSq - fs * mean * mean) / (fs - 1));
+        for (let i = 0; i < fs; i++) x[i] = (x[i] / std) * 0.1;
+        return prepareOutputUnitChannels(x);
+      }
+      
+      el.btnCalibrate1.addEventListener("click", async () => {
+          el.measuredSPLDropdown.innerHTML = "";
+          const levels = [0];
+          for (let l = 95; l >= 65; l--) levels.push(l);
+          levels.forEach((lvl) => {
+              const opt = document.createElement("option");
+              opt.value = String(lvl);
+              opt.textContent = String(lvl);
+              el.measuredSPLDropdown.appendChild(opt);
+          });
+          
+          el.lblMeasuredSPL.classList.remove("disabled");
+          const { outL, outR } = generateCalibrationSignal();
+          
+          try {
+            await initAudioEngine();
+          } catch (err) {
+            alert("Cannot start calibration stream: " + err.message);
+            return;
+          }
+          
+          appState.calChunks = [];
+          appState.workletNode.port.onmessage = (e) => {
+            if (e.data.type === "data") appState.calChunks.push(e.data.samples);
+          };
+          
+          appState.workletNode.port.postMessage({
+              type: "start_cyclic",
+              sourceL: outL,
+              sourceR: outR,
+              maxSamples: appState.sampleRate * appState.maximumDuration,
+          });
+          
+          appState.memoBackupMsg = el.statusLabel.textContent;
+          appState.calStartTime = performance.now();
+          setLampActive(true);
+          
+          appState.calTimer = setInterval(() => {
+              const elapsed = (performance.now() - appState.calStartTime) / 1000.0;
+              if (elapsed > 3.1 && el.measuredSPLDropdown.disabled) {
+                el.measuredSPLDropdown.disabled = false;
+                el.statusLabel.textContent = "Select Measured SPL from dropdown to finish calibration.";
+              }
+          }, 100);
+      });
+      
+      el.measuredSPLDropdown.addEventListener("change", async () => {
+          appState.ch1MeasuredSpl = parseFloat(el.measuredSPLDropdown.value);
+          if (appState.calTimer) {
+            clearInterval(appState.calTimer);
+            appState.calTimer = null;
+          }
+          await closeAudioEngine();
+          setLampActive(false);
+          
+          const totalLen = appState.calChunks.reduce((acc, c) => acc + c.length, 0);
+          const y = new Float64Array(totalLen);
+          let pos = 0;
+          for (const c of appState.calChunks) { y.set(c, pos); pos += c.length; }
+          
+          const tailLen = Math.min(y.length, 3 * appState.sampleRate);
+          if (tailLen > 1) {
+            const tail = y.subarray(y.length - tailLen);
+            let sum = 0.0, sumSq = 0.0;
+            for (let i = 0; i < tailLen; i++) { sum += tail[i]; sumSq += tail[i] * tail[i]; }
+            const mean = sum / tailLen;
+            const std = Math.sqrt(Math.max(0, (sumSq - tailLen * mean * mean) / (tailLen - 1)));
+            const observedStdDb = 20.0 * Math.log10(Math.max(std, 1e-12));
+            appState.ch1CalDb = appState.ch1MeasuredSpl - observedStdDb;
+            el.calValSpin.value = appState.ch1CalDb.toFixed(1);
+          }
+          
+          bandSplPlot.yRange = [0, 100];
+          bandSplPlot.yLabel = "CAL. SPL (dB)";
+          bandSplPlot.draw();
+          
+          el.btnCalibrate1.disabled = true;
+          el.measuredSPLDropdown.disabled = true;
+          el.lblMeasuredSPL.classList.add("disabled");
+          el.statusLabel.textContent = appState.memoBackupMsg;
+      });
+      
+      el.btnVoiceMemo.addEventListener("click", async () => {
+          try {
+            await initAudioEngine();
+          } catch (err) {
+            alert("Cannot start voice memo: " + err.message);
+            return;
+          }
+          
+          const fs = appState.sampleRate;
+          const maxSamples = Math.floor(fs * 5.3);
+          appState.memoChunks = [];
+          
+          appState.workletNode.port.onmessage = (e) => {
+            if (e.data.type === "data") appState.memoChunks.push(e.data.samples);
+          };
+          
+          appState.workletNode.port.postMessage({ type: "start_memo", maxSamples });
+          appState.memoBackupMsg = el.statusLabel.textContent;
+          appState.memoStartTime = performance.now();
+          setLampActive(true);
+          el.btnVoiceMemo.disabled = true;
+          
+          appState.memoTimer = setInterval(async () => {
+              const elapsed = (performance.now() - appState.memoStartTime) / 1000.0;
+              if (elapsed <= 5.3) {
+                const left = Math.max(0.0, Math.round((5.0 - elapsed) * 10) / 10);
+                el.statusLabel.textContent = `Voice memo: ${left.toFixed(1)} (s) left`;
+              } else {
+                clearInterval(appState.memoTimer);
+                appState.memoTimer = null;
+                await closeAudioEngine();
+                setLampActive(false);
+                el.statusLabel.textContent = appState.memoBackupMsg;
+                el.btnVoiceMemo.disabled = false;
+                
+                const totalLen = appState.memoChunks.reduce((acc, c) => acc + c.length, 0);
+                const nKeep = Math.min(totalLen, fs * 5);
+                if (nKeep > 0) {
+                  const y = new Float64Array(nKeep);
+                  let ptr = 0, maxAmp = 0.0;
+                  for (const c of appState.memoChunks) {
+                    for (let i = 0; i < c.length && ptr < nKeep; i++, ptr++) {
+                      y[ptr] = c[i];
+                      const a = Math.abs(c[i]);
+                      if (a > maxAmp) maxAmp = a;
+                    }
+                  }
+                  if (maxAmp > 0) {
+                    for (let i = 0; i < nKeep; i++) y[i] = (y[i] / maxAmp) * 0.5;
+                  }
+                  const wavBlob = encodeWav24Bit([y], 1, fs);
+                  await saveBlobToWorkspace(appState.workspaceDirHandle, `voiceMemo${getTimestampStr()}r.wav`, wavBlob);
+                }
+              }
+          }, 100);
+      });
+      
+      el.btnSnapshotLevel.addEventListener("click", () => {
+          const sig = bandSplPlot.curves["sig"];
+          if (sig && sig.x && sig.y) {
+            bandSplPlot.setCurve("snap", new Float64Array(sig.x), new Float64Array(sig.y), "rgb(0, 160, 0)", 2);
+            bandSplPlot.draw();
+          }
+      });
+      
+      // Full-GUI Snapshot Renderer (captures all 3 panels, controls, and plots)
+      el.btnSnapshotGUI.addEventListener("click", async () => {
+          const root = document.getElementById("appRoot");
+          const rootRect = root.getBoundingClientRect();
+          const dpr = window.devicePixelRatio || 1;
+          const pad = 10;
+          const W = Math.round(rootRect.width + pad * 2);
+          const H = Math.round(rootRect.height + pad * 2);
+          
+          const outCanvas = document.createElement("canvas");
+          outCanvas.width = W * dpr;
+          outCanvas.height = H * dpr;
+          const ctx = outCanvas.getContext("2d");
+          ctx.scale(dpr, dpr);
+          
+          const rx = (rect) => rect.left - rootRect.left + pad;
+          const ry = (rect) => rect.top - rootRect.top + pad;
+          
+          const roundRect = (x, y, w, h, r, fill, stroke, lineWidth = 1) => {
+            ctx.beginPath();
+            if (ctx.roundRect) {
+              ctx.roundRect(x, y, w, h, r);
+            } else {
+              ctx.rect(x, y, w, h);
+            }
+            if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+            if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lineWidth; ctx.stroke(); }
+          };
+          
+          // 1. App Background
+          ctx.fillStyle = "#eef1f5";
+          ctx.fillRect(0, 0, W, H);
+          
+          // 2. Panels & GroupBoxes
+          root.querySelectorAll(".panel, .group-box, .status-box, .plot-container-top, .plot-box").forEach((box) => {
+              const r = box.getBoundingClientRect();
+              const isStatus = box.classList.contains("status-box");
+              roundRect(
+                rx(r), ry(r), r.width, r.height,
+                isStatus ? 4 : 6,
+                isStatus ? "#f4f6f8" : "#ffffff",
+                "#cfd6df", 1
+              );
+          });
+          
+          // 3. Panel Titles & Group Titles
+          root.querySelectorAll(".panel-title, .group-title").forEach((t) => {
+              const r = t.getBoundingClientRect();
+              const isPanel = t.classList.contains("panel-title");
+              ctx.font = isPanel ? "bold 13px Arial" : "bold 11px Arial";
+              ctx.fillStyle = isPanel ? "#374151" : "#4b5563";
+              ctx.textAlign = "left";
+              ctx.textBaseline = "top";
+              ctx.fillText(t.textContent.trim(), rx(r), ry(r) + 2);
+              if (isPanel) {
+                ctx.strokeStyle = "#e5e7eb";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(rx(r), ry(r) + r.height);
+                ctx.lineTo(rx(r) + r.width, ry(r) + r.height);
+                ctx.stroke();
+              }
+          });
+          
+          // 4. Status Box Multiline Text
+          {
+            const r = el.statusLabel.getBoundingClientRect();
+            ctx.font = "12px Arial";
+            ctx.fillStyle = "#1f2937";
+            ctx.textAlign = "left";
+            ctx.textBaseline = "top";
+            const words = el.statusLabel.textContent.split(" ");
+            let line = "", yPos = ry(r) + 8;
+            const maxW = r.width - 16;
+            for (const w of words) {
+              const test = line ? line + " " + w : w;
+              if (ctx.measureText(test).width > maxW && line) {
+                ctx.fillText(line, rx(r) + 8, yPos);
+                line = w;
+                yPos += 16;
+              } else {
+                line = test;
+              }
+            }
+            if (line) ctx.fillText(line, rx(r) + 8, yPos);
+          }
+          
+          // 5. Standalone Labels (excluding radio item labels)
+          root.querySelectorAll("label:not(.radio-item)").forEach((lbl) => {
+              const r = lbl.getBoundingClientRect();
+              const dis = lbl.classList.contains("disabled");
+              ctx.font = "bold 12px Arial";
+              ctx.fillStyle = dis ? "#9ca3af" : "#374151";
+              ctx.textAlign = "left";
+              ctx.textBaseline = "middle";
+              ctx.fillText(lbl.textContent.trim(), rx(r), ry(r) + r.height / 2);
+          });
+          
+          // 6. Buttons
+          root.querySelectorAll("button").forEach((btn) => {
+              const r = btn.getBoundingClientRect();
+              const dis = btn.disabled;
+              ctx.save();
+              if (dis) ctx.globalAlpha = 0.5;
+              roundRect(rx(r), ry(r), r.width, r.height, 4, "#f8fafc", "#b8c2cc", 1);
+              ctx.font = "bold 12px Arial";
+              ctx.fillStyle = "#1f2937";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText(btn.textContent.trim(), rx(r) + r.width / 2, ry(r) + r.height / 2);
+              ctx.restore();
+          });
+          
+          // 7. Select Dropdowns & Numeric Inputs
+          root.querySelectorAll("select, input[type='number']").forEach((inp) => {
+              const r = inp.getBoundingClientRect();
+              const dis = inp.disabled;
+              ctx.save();
+              if (dis) ctx.globalAlpha = 0.5;
+              roundRect(rx(r), ry(r), r.width, r.height, 4, "#ffffff", "#b8c2cc", 1);
+              let text = "";
+              if (inp.tagName === "SELECT") {
+                text = inp.options[inp.selectedIndex] ? inp.options[inp.selectedIndex].text : "";
+              } else {
+                text = inp.value;
+              }
+              ctx.font = "12px Arial";
+              ctx.fillStyle = "#1f2937";
+              ctx.textAlign = "left";
+              ctx.textBaseline = "middle";
+              ctx.save();
+              ctx.beginPath();
+              ctx.rect(rx(r) + 6, ry(r), r.width - 24, r.height);
+              ctx.clip();
+              ctx.fillText(text, rx(r) + 8, ry(r) + r.height / 2);
+              ctx.restore();
+              if (inp.tagName === "SELECT") {
+                ctx.fillStyle = "#6b7280";
+                ctx.font = "10px Arial";
+                ctx.textAlign = "right";
+                ctx.fillText("▼", rx(r) + r.width - 7, ry(r) + r.height / 2);
+              }
+              ctx.restore();
+          });
+          
+          // 8. Radio Buttons & Labels
+          root.querySelectorAll("label.radio-item").forEach((lbl) => {
+              const rb = lbl.querySelector("input[type='radio']");
+              if (!rb) return;
+              const rbRect = rb.getBoundingClientRect();
+              const lblRect = lbl.getBoundingClientRect();
+              const dis = rb.disabled;
+              ctx.save();
+              if (dis) ctx.globalAlpha = 0.5;
+              const cx = rx(rbRect) + rbRect.width / 2;
+              const cy = ry(rbRect) + rbRect.height / 2;
+              ctx.beginPath();
+              ctx.arc(cx, cy, 6.5, 0, Math.PI * 2);
+              ctx.fillStyle = rb.checked ? "#0072bd" : "#ffffff";
+              ctx.fill();
+              ctx.lineWidth = 1.5;
+              ctx.strokeStyle = rb.checked ? "#0072bd" : "#9ca3af";
+              ctx.stroke();
+              if (rb.checked) {
+                ctx.beginPath();
+                ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffffff";
+                ctx.fill();
+              }
+              ctx.font = "12px Arial";
+              ctx.fillStyle = "#1f2937";
+              ctx.textAlign = "left";
+              ctx.textBaseline = "middle";
+              ctx.fillText(lbl.textContent.trim(), rx(rbRect) + rbRect.width + 5, ry(lblRect) + lblRect.height / 2);
+              ctx.restore();
+          });
+          
+          // 9. Recording Lamp
+          {
+            const r = el.recLamp.getBoundingClientRect();
+            const active = el.recLamp.classList.contains("active");
+            ctx.beginPath();
+            ctx.arc(rx(r) + r.width / 2, ry(r) + r.height / 2, r.width / 2, 0, Math.PI * 2);
+            ctx.fillStyle = active ? "#2ecc71" : "#bdc3c7";
+            ctx.fill();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = active ? "#27ae60" : "#95a5a6";
+            ctx.stroke();
+          }
+          
+          // 10. BPF fc Slider
+          {
+            const r = el.bpfSlider.getBoundingClientRect();
+            const min = parseFloat(el.bpfSlider.min) || 0;
+            const max = parseFloat(el.bpfSlider.max) || 100;
+            const val = parseFloat(el.bpfSlider.value) || 50;
+            const ratio = Math.max(0, Math.min(1, (val - min) / Math.max(1, max - min)));
+            const trackY = ry(r) + r.height / 2;
+            const thumbX = rx(r) + 8 + ratio * (r.width - 16);
+            
+            roundRect(rx(r), trackY - 3, r.width, 6, 3, "#e2e8f0", null);
+            roundRect(rx(r), trackY - 3, thumbX - rx(r), 6, 3, "#0072bd", null);
+            
+            ctx.beginPath();
+            ctx.arc(thumbX, trackY, 8, 0, Math.PI * 2);
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = "#9ca3af";
+            ctx.stroke();
+          }
+          
+          // 11. Draw the 3 Plot Canvases in their exact positions
+          ["spectrumCanvas", "bandSplCanvas", "powerRespCanvas"].forEach((id) => {
+              const c = document.getElementById(id);
+              const r = c.getBoundingClientRect();
+              ctx.drawImage(c, rx(r), ry(r), r.width, r.height);
+          });
+          
+          outCanvas.toBlob(async (blob) => {
+              if (blob) {
+                await saveBlobToWorkspace(appState.workspaceDirHandle, `GUIsnapAT${getTimestampStr()}.png`, blob);
+              }
+          }, "image/png");
+      });
+    </script>
+  </body>
+</html>
