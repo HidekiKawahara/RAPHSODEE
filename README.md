@@ -1,6 +1,16 @@
 # RAPHSODEE
 
-A new series of acoustic attributes analysis. This is an extension of safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
+A new series of acoustic attribute analyses. This extends safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
+
+## Giant-FFT-based acoustic checker is implemented in MATLAB, Python, and JavaScript (20 Oct., 2026)
+
+They are in src
+
+acouticCheckerByGFFTRefactored_v2_exportedR.m
+
+acoustic_checker_gfft.py
+
+acoustic_checker_gfft.html
 
 ## Test scripts for giant-FFT implementation of safeguarding (07 Oct., 2025)
 
