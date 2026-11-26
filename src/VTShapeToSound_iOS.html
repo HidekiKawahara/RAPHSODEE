@@ -1,0 +1,4167 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1100, user-scalable=yes">
+    <title>VTShapeToSound &amp; LFModelDesigner (Web Audio API Edition)</title>
+    <style>
+      :root {
+        --bg-main: #f0f0f0;
+        --bg-panel: #e8e8e8;
+        --border-col: #b8b8b8;
+        --accent: #005a9e;
+        --text-main: #1a1a1a;
+      }
+      * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+      body {
+        margin: 0; padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        background: #d8d8d8; color: var(--text-main);
+        display: flex; flex-direction: column; align-items: center;
+        min-height: 100vh;
+      }
+      /* Top Navigation Bar & Tabs */
+      .top-bar {
+        width: 1080px; background: #2b2b2b; color: #fff;
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 6px 14px; border-radius: 6px 6px 0 0; margin-top: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      }
+      .app-title { font-size: 14px; font-weight: 600; letter-spacing: 0.3px; }
+      .tab-bar { display: flex; gap: 6px; }
+      .tab-btn {
+        background: #444; color: #ddd; border: none;
+        padding: 6px 16px; font-size: 13px; font-weight: 600;
+        border-radius: 4px; cursor: pointer; transition: 0.15s;
+      }
+      .tab-btn:hover { background: #555; color: #fff; }
+      .tab-btn.active { background: #0078d4; color: #fff; }
+      
+      /* Application Container matching MATLAB pixel dimensions */
+      .workspace {
+        width: 1080px; height: 675px;
+        background: var(--bg-main);
+        border: 1px solid #999; border-top: none;
+        border-radius: 0 0 6px 6px;
+        position: relative; overflow: hidden;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+      }
+      .tab-pane {
+        width: 100%; height: 100%;
+        position: absolute; top: 0; left: 0;
+        display: none;
+      }
+      .tab-pane.active { display: block; }
+      
+      /* Absolute UI Controls matching MATLAB App Designer */
+      canvas {
+        position: absolute;
+        background: #ffffff;
+        z-index: 1;
+        touch-action: none;
+      }
+      canvas.bg-gray { background: var(--bg-main); }
+      
+      .ui-btn {
+        position: absolute;
+        background: linear-gradient(to bottom, #ffffff 0%, #e2e2e2 100%);
+        border: 1px solid #8c8c8c; border-radius: 3px;
+        color: #111; font-size: 12px; font-weight: 500;
+        cursor: pointer; display: flex; align-items: center; justify-content: center;
+        padding: 0 4px;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+        z-index: 10;
+      }
+      .ui-btn:hover:not(:disabled) {
+        background: linear-gradient(to bottom, #f8fbff 0%, #d4e4f7 100%);
+        border-color: #005a9e;
+      }
+      .ui-btn:active:not(:disabled) {
+        background: #c8dcf0;
+      }
+      .ui-btn:disabled {
+        opacity: 0.48; cursor: not-allowed;
+      }
+      .ui-panel {
+        position: absolute;
+        background: var(--bg-main);
+        border: 1px solid var(--border-col);
+        border-radius: 3px;
+        z-index: 10;
+      }
+      .ui-panel-title {
+        position: absolute; top: -9px; left: 7px;
+        background: var(--bg-main); padding: 0 4px;
+        font-size: 11.5px; font-weight: 600; color: #222;
+      }
+      .ui-label {
+        position: absolute;
+        font-size: 12px; color: #111;
+        display: flex; align-items: center;
+        white-space: nowrap;
+        z-index: 10;
+      }
+      .ui-input, .ui-select {
+        position: absolute;
+        background: #fff; border: 1px solid #8c8c8c;
+        border-radius: 2px; font-size: 12px; color: #111;
+        padding: 1px 4px;
+        z-index: 10;
+      }
+      .ui-input { text-align: right; }
+      .ui-check {
+        position: absolute; display: flex; align-items: center;
+        gap: 5px; font-size: 12px; cursor: pointer;
+        z-index: 10;
+      }
+      /* Save Format Dropdown Popup */
+      .save-menu {
+        position: absolute; background: #fff; border: 1px solid #888;
+        border-radius: 4px; box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        z-index: 100; display: none; flex-direction: column;
+        min-width: 225px; padding: 4px 0;
+      }
+      .save-menu.open { display: flex; }
+      .save-menu button {
+        background: none; border: none; text-align: left;
+        padding: 6px 12px; font-size: 12px; cursor: pointer;
+      }
+      .save-menu button:hover { background: #0078d4; color: #fff; }
+    </style>
+  </head>
+  <body>
+    
+    <!-- Top Navigation Bar -->
+    <div class="top-bar">
+      <div class="app-title">VTShapeToSound &amp; LFModelDesigner &mdash; 44.1 kHz / 24-bit Web Audio Synthesizer</div>
+      <div class="tab-bar">
+        <button id="tabBtnVT" class="tab-btn active" onclick="switchTab('vt')">1. Vocal Tract Synthesizer (VTShapeToSound)</button>
+        <button id="tabBtnLF" class="tab-btn" onclick="switchTab('lf')">2. L-F Source &amp; F0 Designer (lfModelDesignerX)</button>
+      </div>
+    </div>
+    
+    <!-- Main Workspace -->
+    <div class="workspace">
+      
+      <!-- ================================================================== -->
+      <!-- TAB 1: VTShapeToSoundApp                                           -->
+      <!-- ================================================================== -->
+      <div id="paneVT" class="tab-pane active">
+        <!-- Top-Left: VTDrawer Canvas (bottom at y=338, leaving clean space for bottom panels) -->
+        <canvas id="cvVTDrawer" width="465" height="332" style="left:6px; top:6px;"></canvas>
+        <button id="btnResetVT" class="ui-btn" style="left:382px; top:34px; width:65px; height:34px;">Reset</button>
+        
+        <!-- Bottom-Left: Basis Buttons, Slider, and Fourier Modifier Axis -->
+        <button id="btnModReset" class="ui-btn" style="left:30px; top:352px; width:60px; height:34px;">Reset</button>
+        <button id="btnShowAllBasis" class="ui-btn" style="left:98px; top:352px; width:72px; height:34px;">Show all</button>
+        
+        <canvas id="cvSlider" class="bg-gray" width="54" height="268" style="left:28px; top:394px;"></canvas>
+        <canvas id="cvModifier" width="352" height="268" style="left:88px; top:394px;"></canvas>
+        
+        <!-- Center: VT Length Panel (Positioned cleanly in the gap below VTDrawer/GainPlot) -->
+        <div class="ui-panel" style="left:438px; top:344px; width:136px; height:48px;">
+          <div class="ui-panel-title">VT length (cm)</div>
+          <input id="numVTL" type="number" step="0.05" min="8" max="35" value="17.06" class="ui-input" style="left:8px; top:13px; width:58px; height:25px;">
+          <button id="btnResetVTL" class="ui-btn" style="left:72px; top:12px; width:54px; height:27px;">Reset</button>
+        </div>
+        
+        <!-- Center: Source Panel -->
+        <div class="ui-panel" style="left:454px; top:400px; width:120px; height:264px;">
+          <div class="ui-panel-title">Source</div>
+          <div class="ui-label" style="left:8px; top:14px;">F0 (Hz)</div>
+          <button id="btnSourceReset" class="ui-btn" style="left:62px; top:10px; width:48px; height:24px;">Reset</button>
+          <input id="numF0" type="number" step="0.5" min="55" max="880" value="125.0" class="ui-input" style="left:14px; top:39px; width:82px; height:24px;">
+          
+          <select id="selNoteName" class="ui-select" style="left:8px; top:70px; width:102px; height:24px;">
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Design">Design</option>
+            <option value="0">A1 (55Hz)</option>
+            <option value="3">C2</option>
+            <option value="7">E2</option>
+            <option value="10">G2</option>
+            <option value="12">A2 (110Hz)</option>
+            <option value="15">C3</option>
+            <option value="19">E3</option>
+            <option value="22">G3</option>
+            <option value="24">A3 (220Hz)</option>
+            <option value="27">C4</option>
+          </select>
+          
+          <select id="selVoiceQuality" class="ui-select" style="left:8px; top:102px; width:102px; height:24px;">
+            <option value="Modal">Modal</option>
+            <option value="Fry">Fry</option>
+            <option value="Breathy">Breathy</option>
+            <option value="Design">Design</option>
+          </select>
+          
+          <div class="ui-label" style="left:6px; top:134px; font-size:11px;">Vibrato rate depth</div>
+          <input id="numVibRate" type="number" step="0.1" min="0.5" max="20" value="5.50" class="ui-input" style="left:8px; top:155px; width:56px; height:24px;">
+          <div class="ui-label" style="left:68px; top:157px; font-size:11px;">(Hz)</div>
+          
+          <input id="numVibDepth" type="number" step="5" min="0" max="600" value="50" class="ui-input" style="left:8px; top:185px; width:56px; height:24px;">
+          <div class="ui-label" style="left:68px; top:187px; font-size:11px;">(cent)</div>
+          
+          <select id="selDuration" class="ui-select" style="left:8px; top:222px; width:102px; height:24px;">
+            <option value="0.25">0.25 s</option>
+            <option value="0.5">0.5 s</option>
+            <option value="1.0" selected>1.0 s</option>
+            <option value="2.0">2.0 s</option>
+            <option value="4.0">4.0 s</option>
+          </select>
+        </div>
+        
+        <!-- Top-Right: GainPlot Dual Y-Axis Canvas (bottom at y=338, right of VTLPanel) -->
+        <canvas id="cvGainPlot" width="552" height="332" style="left:520px; top:6px;"></canvas>
+        
+        <!-- Floating Pole Readout Controls (Positioned below GainPlot, right of VTLPanel) -->
+        <div id="lblPoleFreq" class="ui-label" style="left:590px; top:354px; display:none; font-weight:600;">Freq (Hz):</div>
+        <input id="numPoleFreq" type="number" step="5" min="50" max="4950" value="500" class="ui-input" style="left:655px; top:352px; width:68px; height:22px; display:none;">
+        <div id="lblPoleBW" class="ui-label" style="left:735px; top:354px; display:none; font-weight:600;">BW (Hz):</div>
+        <input id="numPoleBW" type="number" step="2" min="2" max="1500" value="100" class="ui-input" style="left:793px; top:352px; width:68px; height:22px; display:none;">
+        
+        <!-- Bottom-Right: 3D Vocal Tract Tube -->
+        <canvas id="cvVT3d" class="bg-gray" width="305" height="220" style="left:582px; top:382px;"></canvas>
+        
+        <!-- Synthesis & File Action Buttons -->
+        <button id="btnSoundIt" class="ui-btn" style="left:898px; top:430px; width:152px; height:38px; font-size:13px; font-weight:600;">Sound it</button>
+        <button id="btnSaveVT" class="ui-btn" style="left:898px; top:476px; width:73px; height:34px;" disabled>Save &#9662;</button>
+        <button id="btnLoadVT" class="ui-btn" style="left:977px; top:476px; width:73px; height:34px;">Load</button>
+        <input id="fileLoadVT" type="file" accept=".json,.txt" style="display:none;">
+        
+        <!-- Save Dropdown Menu -->
+        <div id="menuSaveVT" class="save-menu" style="left:845px; top:512px;">
+          <button id="btnExportAllVT" style="font-weight:600; border-bottom:1px solid #ddd;">Save All to Folder (.wav + .txt + .json)...</button>
+          <button id="btnExportWav24">Save 24-bit WAV (.wav) As...</button>
+          <button id="btnExportTxtVT">Save Area Function (.txt) As...</button>
+          <button id="btnExportJsonVT">Save Full State (.json) As...</button>
+        </div>
+        
+        <label class="ui-check" style="left:902px; top:522px;">
+          <input id="chkReleaseToPlay" type="checkbox"> Release to play
+        </label>
+        
+        <!-- Microphone Spectrum Monitor -->
+        <label class="ui-check" style="left:804px; top:628px;">
+          <input id="chkMonitor" type="checkbox"> Monitor
+        </label>
+        <div id="pnlMonitor" class="ui-panel" style="left:582px; top:610px; width:214px; height:52px; display:none;">
+          <div class="ui-panel-title">Sound Monitor</div>
+          <button id="btnMonStart" class="ui-btn" style="left:6px; top:16px; width:48px; height:26px;">Start</button>
+          <button id="btnMonStop" class="ui-btn" style="left:58px; top:16px; width:48px; height:26px;" disabled>Stop</button>
+          <button id="btnMonPlay" class="ui-btn" style="left:110px; top:16px; width:48px; height:26px;" disabled>Play</button>
+          <div id="lblMonCounter" class="ui-label" style="left:166px; top:18px; font-weight:600;">200</div>
+        </div>
+        
+        <button id="btnResetAllVT" class="ui-btn" style="left:898px; top:620px; width:152px; height:36px; font-size:13px;">Reset All</button>
+      </div>
+      
+      <!-- ================================================================== -->
+      <!-- TAB 2: LFModelDesignerApp                                          -->
+      <!-- ================================================================== -->
+      <div id="paneLF" class="tab-pane">
+        <!-- Top-Left: Volume Velocity (Ug) -->
+        <canvas id="cvLFVV" class="bg-gray" width="420" height="255" style="left:15px; top:20px;"></canvas>
+        <div class="ui-label" style="left:35px; top:28px; font-size:14px; font-weight:600;">Volume velocity (Ug)</div>
+        
+        <!-- Bottom-Left: LF Model Derivative (Eg) -->
+        <canvas id="cvLFSource" class="bg-gray" width="420" height="330" style="left:15px; top:285px;"></canvas>
+        <div class="ui-label" style="left:45px; top:518px; font-size:14px; font-weight:600;">LF model signal (Eg)</div>
+        <button id="btnLFReset" class="ui-btn" style="left:55px; top:555px; width:95px; height:36px;">Reset</button>
+        
+        <!-- Parameter Readouts -->
+        <div id="lblTp" class="ui-label" style="left:45px; top:630px; font-size:13px; font-family:monospace; font-weight:600;">tp: 44.823</div>
+        <div id="lblTe" class="ui-label" style="left:140px; top:630px; font-size:13px; font-family:monospace; font-weight:600;">te: 59.797</div>
+        <div id="lblTa" class="ui-label" style="left:235px; top:630px; font-size:13px; font-family:monospace; font-weight:600;">ta:  1.781</div>
+        <div id="lblTc" class="ui-label" style="left:330px; top:630px; font-size:13px; font-family:monospace; font-weight:600;">tc: 68.004</div>
+        
+        <!-- Top-Right: Spectrum with +6dB/oct emphasis -->
+        <canvas id="cvLFSpectrum" width="595" height="325" style="left:460px; top:10px;"></canvas>
+        
+        <!-- Bottom-Right: F0 Base Slider & F0 Sketchpad -->
+        <canvas id="cvLFF0Base" class="bg-gray" width="46" height="270" style="left:465px; top:340px;"></canvas>
+        <div id="lblLFF0Base" class="ui-label" style="left:460px; top:625px; font-size:13px; font-weight:600;">110.0 Hz</div>
+        
+        <canvas id="cvLFF0Paint" width="540" height="270" style="left:515px; top:340px;"></canvas>
+        
+        <!-- Bottom-Right Action Buttons -->
+        <button id="btnLFLoad" class="ui-btn" style="left:560px; top:620px; width:95px; height:36px;">Load prm.</button>
+        <input id="fileLoadLF" type="file" accept=".json,.txt" style="display:none;">
+        <button id="btnLFSave" class="ui-btn" style="left:665px; top:620px; width:95px; height:36px;" disabled>Save...</button>
+        <button id="btnLFPlay" class="ui-btn" style="left:770px; top:620px; width:95px; height:36px; font-weight:600;">Play Source</button>
+        <button id="btnLFBack" class="ui-btn" style="left:875px; top:620px; width:165px; height:36px;">&#8592; Back to Vocal Tract</button>
+      </div>
+      
+    </div>
+    
+    <script>
+      "use strict";
+      
+      /* ============================================================================
+ * 0. SHARED AUDIO CONTEXT, FILE SYSTEM PICKERS & DSP UTILITIES (Float64Array)
+ * ============================================================================ */
+      let sharedAudioCtx = null;
+      function getAudioContext() {
+        if (!sharedAudioCtx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          try {
+            sharedAudioCtx = new AudioCtx({ sampleRate: 44100 });
+          } catch (e) {
+            sharedAudioCtx = new AudioCtx();
+          }
+        }
+        if (sharedAudioCtx.state === "suspended") {
+          sharedAudioCtx.resume();
+        }
+        return sharedAudioCtx;
+      }
+      
+      class DSPUtils {
+        // In-place Radix-2 Cooley-Tukey FFT (Float64Array re, im).
+        static fft(re, im, invert = false) {
+          const n = re.length;
+          let j = 0;
+          for (let i = 1; i < n; i++) {
+            let bit = n >> 1;
+            while (j & bit) { j ^= bit; bit >>= 1; }
+            j ^= bit;
+            if (i < j) {
+              let tr = re[i]; re[i] = re[j]; re[j] = tr;
+              let ti = im[i]; im[i] = im[j]; im[j] = ti;
+            }
+          }
+          for (let len = 2; len <= n; len <<= 1) {
+            const ang = 2 * Math.PI / len * (invert ? 1 : -1);
+            const wlenRe = Math.cos(ang);
+            const wlenIm = Math.sin(ang);
+            const half = len >> 1;
+            for (let i = 0; i < n; i += len) {
+              let wRe = 1.0, wIm = 0.0;
+              for (let k = 0; k < half; k++) {
+                const uRe = re[i + k], uIm = im[i + k];
+                const vRe = re[i + k + half] * wRe - im[i + k + half] * wIm;
+                const vIm = re[i + k + half] * wIm + im[i + k + half] * wRe;
+                re[i + k] = uRe + vRe;
+                im[i + k] = uIm + vIm;
+                re[i + k + half] = uRe - vRe;
+                im[i + k + half] = uIm - vIm;
+                const nextWRe = wRe * wlenRe - wIm * wlenIm;
+                wIm = wRe * wlenIm + wIm * wlenRe;
+                wRe = nextWRe;
+              }
+            }
+          }
+          if (invert) {
+            for (let i = 0; i < n; i++) {
+              re[i] /= n;
+              im[i] /= n;
+            }
+          }
+        }
+        
+        // Direct Form II Transposed IIR/FIR digital filter matching MATLAB filter(b, a, x)
+        static filter(b, a, x) {
+          const N = x.length;
+          const out = new Float64Array(N);
+          const nb = b.length, na = a.length;
+          const nOrder = Math.max(nb, na);
+          const a0 = a[0];
+          const bNorm = new Float64Array(nOrder);
+          const aNorm = new Float64Array(nOrder);
+          for (let i = 0; i < nb; i++) bNorm[i] = b[i] / a0;
+          for (let i = 0; i < na; i++) aNorm[i] = a[i] / a0;
+          const z = new Float64Array(nOrder);
+          for (let n = 0; n < N; n++) {
+            const xn = x[n];
+            const yn = bNorm[0] * xn + z[0];
+            out[n] = yn;
+            for (let i = 1; i < nOrder; i++) {
+              z[i - 1] = bNorm[i] * xn + z[i] - aNorm[i] * yn;
+            }
+          }
+          return out;
+        }
+        
+        static fftfilt(h, x) {
+          return DSPUtils.filter(h, [1.0], x);
+        }
+        
+        static interp1(xArr, yArr, xiArr) {
+          const n = xArr.length;
+          const m = xiArr.length;
+          const out = new Float64Array(m);
+          if (n < 2) {
+            out.fill(n === 1 ? yArr[0] : 0);
+            return out;
+          }
+          for (let i = 0; i < m; i++) {
+            const xi = xiArr[i];
+            if (xi <= xArr[0]) {
+              const dx = xArr[1] - xArr[0];
+              const slope = Math.abs(dx) > 1e-15 ? (yArr[1] - yArr[0]) / dx : 0;
+              out[i] = yArr[0] + (xi - xArr[0]) * slope;
+            } else if (xi >= xArr[n - 1]) {
+              const dx = xArr[n - 1] - xArr[n - 2];
+              const slope = Math.abs(dx) > 1e-15 ? (yArr[n - 1] - yArr[n - 2]) / dx : 0;
+              out[i] = yArr[n - 1] + (xi - xArr[n - 1]) * slope;
+            } else {
+              let lo = 0, hi = n - 1;
+              while (hi - lo > 1) {
+                const mid = (lo + hi) >> 1;
+                if (xArr[mid] <= xi) lo = mid; else hi = mid;
+              }
+              const dx = xArr[hi] - xArr[lo];
+              const t = Math.abs(dx) > 1e-15 ? (xi - xArr[lo]) / dx : 0;
+              out[i] = yArr[lo] + t * (yArr[hi] - yArr[lo]);
+            }
+          }
+          return out;
+        }
+        
+        static interp1Scalar(xArr, yArr, xi) {
+          return DSPUtils.interp1(xArr, yArr, [xi])[0];
+        }
+        
+        static fzero(fun, x0) {
+          let x = x0;
+          let fx = fun(x);
+          if (Math.abs(fx) < 1e-13) return x;
+          let dx = Math.abs(x0) > 1e-4 ? x0 * 0.02 : 0.01;
+          let xPrev = x - dx;
+          let fPrev = fun(xPrev);
+          for (let iter = 0; iter < 80; iter++) {
+            const df = fx - fPrev;
+            let xNext;
+            if (Math.abs(df) > 1e-15) {
+              xNext = x - fx * (x - xPrev) / df;
+            } else {
+              xNext = x + dx;
+            }
+            const maxStep = Math.max(Math.abs(x) * 2.0, 5.0);
+            if (Math.abs(xNext - x) > maxStep) {
+              xNext = x + Math.sign(xNext - x) * maxStep;
+            }
+            xPrev = x;
+            fPrev = fx;
+            x = xNext;
+            fx = fun(x);
+            if (Math.abs(fx) < 1e-12 || Math.abs(x - xPrev) < 1e-11) break;
+          }
+          return x;
+        }
+        
+        static levinson(r) {
+          const p = r.length - 1;
+          let a = new Float64Array(p + 1);
+          let aPrev = new Float64Array(p + 1);
+          a[0] = 1.0;
+          let E = r[0];
+          if (Math.abs(E) < 1e-15) return a;
+          for (let m = 1; m <= p; m++) {
+            let sum = r[m];
+            for (let k = 1; k < m; k++) sum += a[k] * r[m - k];
+            const km = -sum / E;
+            aPrev.set(a);
+            a[m] = km;
+            for (let k = 1; k < m; k++) {
+              a[k] = aPrev[k] + km * aPrev[m - k];
+            }
+            E *= (1.0 - km * km);
+            if (E <= 1e-15) break;
+          }
+          return a;
+        }
+        
+        static playSignal(samples, fs = 44100) {
+          const ctx = getAudioContext();
+          if (DSPUtils.currentSourceNode) {
+            try { DSPUtils.currentSourceNode.stop(); } catch (e) {}
+            DSPUtils.currentSourceNode = null;
+          }
+          const buf = ctx.createBuffer(1, samples.length, fs);
+          const ch = buf.getChannelData(0);
+          for (let i = 0; i < samples.length; i++) ch[i] = samples[i];
+          const src = ctx.createBufferSource();
+          src.buffer = buf;
+          src.connect(ctx.destination);
+          src.start();
+          DSPUtils.currentSourceNode = src;
+          return src;
+        }
+        
+        // Encode monaural 24-bit PCM WAV Blob
+        static encodeWAV24Bit(samples, fs = 44100) {
+          const numSamples = samples.length;
+          const bytesPerSample = 3; // 24-bit PCM
+          const dataSize = numSamples * bytesPerSample;
+          const buffer = new ArrayBuffer(44 + dataSize);
+          const view = new DataView(buffer);
+          
+          const writeStr = (offset, str) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+          };
+          
+          writeStr(0, "RIFF");
+          view.setUint32(4, 36 + dataSize, true);
+          writeStr(8, "WAVE");
+          writeStr(12, "fmt ");
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true);
+          view.setUint16(22, 1, true);
+          view.setUint32(24, Math.round(fs), true);
+          view.setUint32(28, Math.round(fs) * bytesPerSample, true);
+          view.setUint16(32, bytesPerSample, true);
+          view.setUint16(34, 24, true);
+          writeStr(36, "data");
+          view.setUint32(40, dataSize, true);
+          
+          let offset = 44;
+          for (let i = 0; i < numSamples; i++) {
+            let s = Math.max(-1.0, Math.min(1.0, samples[i]));
+            let intVal = Math.round(s < 0 ? s * 8388608 : s * 8388607);
+            if (intVal < 0) intVal += 16777216;
+            view.setUint8(offset, intVal & 0xFF);
+            view.setUint8(offset + 1, (intVal >> 8) & 0xFF);
+            view.setUint8(offset + 2, (intVal >> 16) & 0xFF);
+            offset += 3;
+          }
+          return new Blob([buffer], { type: "audio/wav" });
+        }
+        
+        static triggerDownload(blob, filename) {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+          }, 250);
+        }
+        
+        // Save a single file with native directory/filename picker (showSaveFilePicker)
+        static async saveSingleFileWithDialog(blob, suggestedName, description, mimeType, ext) {
+          if (window.showSaveFilePicker) {
+            try {
+              const opts = {
+                suggestedName,
+                types: [{ description, accept: { [mimeType]: [ext] } }]
+              };
+              if (DSPUtils.lastDirHandle) opts.startIn = DSPUtils.lastDirHandle;
+              const handle = await window.showSaveFilePicker(opts);
+              const writable = await handle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+              return true;
+            } catch (err) {
+              if (err.name === "AbortError") return false;
+            }
+          }
+          // Fallback for browsers without showSaveFilePicker (e.g. Safari)
+          const customName = window.prompt("Enter file name to save:", suggestedName);
+          if (!customName) return false;
+          const finalName = customName.endsWith(ext) ? customName : (customName + ext);
+          DSPUtils.triggerDownload(blob, finalName);
+          return true;
+        }
+        
+        // Save multiple files (.wav, .txt, .json) into a user-selected directory
+        static async saveBundleToDirectory(defaultBaseName, fileItems) {
+          // Method 1: Native Directory Picker (Chrome / Edge)
+          if (window.showDirectoryPicker) {
+            try {
+              const dirOpts = { mode: "readwrite" };
+              if (DSPUtils.lastDirHandle) dirOpts.startIn = DSPUtils.lastDirHandle;
+              const dirHandle = await window.showDirectoryPicker(dirOpts);
+              DSPUtils.lastDirHandle = dirHandle;
+              
+              const baseNameInput = window.prompt(
+                `Selected folder: "${dirHandle.name}"\nEnter base file name for (${fileItems.map(f => f.ext).join(", ")}):`,
+                defaultBaseName
+              );
+              if (!baseNameInput) return false;
+              const cleanBase = baseNameInput.replace(/\.(wav|txt|json|mat)$/i, "").trim() || defaultBaseName;
+              
+              for (const item of fileItems) {
+                const fileHandle = await dirHandle.getFileHandle(cleanBase + item.ext, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(item.blob);
+                await writable.close();
+              }
+              return true;
+            } catch (err) {
+              if (err.name === "AbortError") return false;
+            }
+          }
+          
+          // Method 2: Sequential showSaveFilePicker if showDirectoryPicker is unavailable
+          if (window.showSaveFilePicker) {
+            try {
+              let cleanBase = defaultBaseName;
+              for (let i = 0; i < fileItems.length; i++) {
+                const item = fileItems[i];
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: cleanBase + item.ext,
+                    types: [{ description: item.description, accept: { [item.mime]: [item.ext] } }]
+                });
+                if (i === 0 && handle.name) {
+                  cleanBase = handle.name.replace(/\.(wav|txt|json|mat)$/i, "");
+                }
+                const writable = await handle.createWritable();
+                await writable.write(item.blob);
+                await writable.close();
+              }
+              return true;
+            } catch (err) {
+              if (err.name === "AbortError") return false;
+            }
+          }
+          
+          // Method 3: Fallback for Safari
+          const baseNameInput = window.prompt(
+            `Enter base file name to save (${fileItems.map(f => f.ext).join(", ")}):`,
+            defaultBaseName
+          );
+          if (!baseNameInput) return false;
+          const cleanBase = baseNameInput.replace(/\.(wav|txt|json|mat)$/i, "").trim() || defaultBaseName;
+          for (const item of fileItems) {
+            DSPUtils.triggerDownload(item.blob, cleanBase + item.ext);
+          }
+          return true;
+        }
+        
+        static timestampStr() {
+          const d = new Date();
+          const pad = (n) => String(n).padStart(2, "0");
+          return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+        }
+      }
+      DSPUtils.lastDirHandle = null;
+      DSPUtils.currentSourceNode = null;
+      
+      /* ============================================================================
+ * 1. CLASS 1: VocalTractModel (Domain Math, Aberth-Ehrlich Roots, LSF, STFT)
+ * ============================================================================ */
+      class VocalTractModel {
+        static getPresetLFParameters(presetName = "modal") {
+          let p;
+          switch (presetName.trim().toLowerCase()) {
+            case "modal": p = VocalTractModel.ModalPreset; break;
+            case "fry":
+            case "vocal fry": p = VocalTractModel.FryPreset; break;
+            case "breathy": p = VocalTractModel.BreathyPreset; break;
+            case "blended":
+            p = [0, 1, 2, 3].map(i =>
+              0.4 * VocalTractModel.ModalPreset[i] +
+              0.3 * VocalTractModel.BreathyPreset[i] +
+              0.3 * VocalTractModel.FryPreset[i]
+            );
+            break;
+            default: p = VocalTractModel.ModalPreset;
+          }
+          return { tp: p[0], te: p[1], ta: p[2], tc: p[3] };
+        }
+        
+        static areaToReflection(areaVector) {
+          const n = areaVector.length - 1;
+          const k = new Float64Array(n);
+          for (let i = 0; i < n; i++) {
+            const denom = Math.max(areaVector[i + 1] + areaVector[i], 2.220446049250313e-16);
+            k[i] = (areaVector[i + 1] - areaVector[i]) / denom;
+          }
+          return k;
+        }
+        
+        static reflectionToArea(k) {
+          const n = k.length;
+          const areaVector = new Float64Array(n + 1);
+          areaVector.fill(1.0);
+          for (let i = n - 1; i >= 0; i--) {
+            areaVector[i] = areaVector[i + 1] * (1.0 - k[i]) / Math.max(1.0 + k[i], 1e-6);
+          }
+          return areaVector;
+        }
+        
+        static reflectionToLpc(k) {
+          const n = k.length;
+          let a = new Float64Array(n);
+          let b = new Float64Array(n);
+          a[0] = k[0];
+          for (let ii = 1; ii < n; ii++) {
+            for (let jj = 0; jj < ii; jj++) {
+              b[jj] = a[jj] - k[ii] * a[ii - 1 - jj];
+            }
+            a.set(b);
+            a[ii] = k[ii];
+          }
+          const alp = new Float64Array(n + 1);
+          alp[0] = 1.0;
+          for (let i = 0; i < n; i++) alp[i + 1] = -a[i];
+          return alp;
+        }
+        
+        static lpcToReflection(alp) {
+          const n = alp.length - 1;
+          let a = new Float64Array(n);
+          let b = new Float64Array(n);
+          for (let i = 0; i < n; i++) a[i] = -alp[i + 1];
+          const k = new Float64Array(n);
+          for (let ii = n - 1; ii >= 0; ii--) {
+            k[ii] = Math.max(-0.995, Math.min(0.995, a[ii]));
+            const denom = Math.max(1.0 - k[ii] * k[ii], 1e-6);
+            for (let jj = 0; jj < ii; jj++) {
+              b[jj] = (a[jj] + k[ii] * a[ii - 1 - jj]) / denom;
+            }
+            a.set(b);
+          }
+          return k;
+        }
+        
+        static computeTransferFunction(logArea, fs = 44100, fftl = 4096) {
+          const area = new Float64Array(logArea.length);
+          for (let i = 0; i < logArea.length; i++) area[i] = Math.exp(logArea[i]);
+          const k = VocalTractModel.areaToReflection(area);
+          const alp = VocalTractModel.reflectionToLpc(k);
+          
+          const re = new Float64Array(fftl);
+          const im = new Float64Array(fftl);
+          for (let i = 0; i < alp.length; i++) re[i] = alp[i];
+          DSPUtils.fft(re, im, false);
+          
+          const gaindB = new Float64Array(fftl);
+          const fx = new Float64Array(fftl);
+          const dcGain = -10.0 * Math.log10(re[0] * re[0] + im[0] * im[0] + 1e-30);
+          for (let i = 0; i < fftl; i++) {
+            const magSq = re[i] * re[i] + im[i] * im[i];
+            gaindB[i] = -10.0 * Math.log10(Math.max(magSq, 1e-30)) - dcGain;
+            fx[i] = (i / fftl) * fs;
+          }
+          return { gaindB, fx, alp };
+        }
+        
+        static predictorToAreaAndGain(alp, fs = 44100, fftl = 4096) {
+          const re = new Float64Array(fftl);
+          const im = new Float64Array(fftl);
+          for (let i = 0; i < alp.length; i++) re[i] = alp[i];
+          DSPUtils.fft(re, im, false);
+          
+          const gaindB = new Float64Array(fftl);
+          const fx = new Float64Array(fftl);
+          const dcGain = -10.0 * Math.log10(re[0] * re[0] + im[0] * im[0] + 1e-30);
+          for (let i = 0; i < fftl; i++) {
+            const magSq = re[i] * re[i] + im[i] * im[i];
+            gaindB[i] = -10.0 * Math.log10(Math.max(magSq, 1e-30)) - dcGain;
+            fx[i] = (i / fftl) * fs;
+          }
+          const k = VocalTractModel.lpcToReflection(alp);
+          const area = VocalTractModel.reflectionToArea(k);
+          const logArea = new Float64Array(area.length);
+          for (let i = 0; i < area.length; i++) {
+            logArea[i] = Math.log(Math.max(area[i], 2.220446049250313e-16));
+          }
+          return { gaindB, fx, logArea };
+        }
+        
+        // Aberth-Ehrlich simultaneous polynomial root finder in Float64Array
+        static polyRootsAberth(alp) {
+          let n = alp.length - 1;
+          while (n > 0 && Math.abs(alp[n]) < 1e-14) n--;
+          if (n <= 0) return { re: new Float64Array(0), im: new Float64Array(0) };
+          
+          const c = new Float64Array(n + 1);
+          const a0 = alp[0];
+          for (let i = 0; i <= n; i++) c[i] = alp[i] / a0;
+          
+          const zRe = new Float64Array(n);
+          const zIm = new Float64Array(n);
+          for (let k = 0; k < n; k++) {
+            const r = 0.88 + 0.04 * Math.cos(k * 1.7);
+            const theta = (2.0 * Math.PI * (k + 0.35)) / n;
+            zRe[k] = r * Math.cos(theta);
+            zIm[k] = r * Math.sin(theta);
+          }
+          
+          const maxIter = 45;
+          for (let iter = 0; iter < maxIter; iter++) {
+            let maxDelta = 0.0;
+            for (let i = 0; i < n; i++) {
+              const x = zRe[i], y = zIm[i];
+              let pRe = c[0], pIm = 0.0;
+              let dpRe = 0.0, dpIm = 0.0;
+              for (let k = 1; k <= n; k++) {
+                const nextDpRe = dpRe * x - dpIm * y + pRe;
+                const nextDpIm = dpRe * y + dpIm * x + pIm;
+                dpRe = nextDpRe; dpIm = nextDpIm;
+                const nextPRe = pRe * x - pIm * y + c[k];
+                const nextPIm = pRe * y + pIm * x;
+                pRe = nextPRe; pIm = nextPIm;
+              }
+              const pMag = Math.hypot(pRe, pIm);
+              if (pMag < 1e-14) continue;
+              
+              const dpMagSq = dpRe * dpRe + dpIm * dpIm;
+              if (dpMagSq < 1e-28) continue;
+              const wRe = (pRe * dpRe + pIm * dpIm) / dpMagSq;
+              const wIm = (pIm * dpRe - pRe * dpIm) / dpMagSq;
+              
+              let sumRe = 0.0, sumIm = 0.0;
+              for (let j = 0; j < n; j++) {
+                if (i === j) continue;
+                const dx = x - zRe[j], dy = y - zIm[j];
+                const dSq = dx * dx + dy * dy;
+                if (dSq > 1e-24) {
+                  sumRe += dx / dSq;
+                  sumIm -= dy / dSq;
+                }
+              }
+              const denRe = 1.0 - (wRe * sumRe - wIm * sumIm);
+              const denIm = -(wRe * sumIm + wIm * sumRe);
+              const denSq = denRe * denRe + denIm * denIm;
+              if (denSq < 1e-28) continue;
+              
+              const dRe = (wRe * denRe + wIm * denIm) / denSq;
+              const dIm = (wIm * denRe - wRe * denIm) / denSq;
+              zRe[i] -= dRe;
+              zIm[i] -= dIm;
+              const delta = Math.hypot(dRe, dIm);
+              if (delta > maxDelta) maxDelta = delta;
+            }
+            if (maxDelta < 1e-11) break;
+          }
+          return { re: zRe, im: zIm };
+        }
+        
+        static polyFromRoots(zRe, zIm) {
+          const n = zRe.length;
+          let cRe = new Float64Array(n + 1);
+          let cIm = new Float64Array(n + 1);
+          cRe[0] = 1.0;
+          for (let i = 0; i < n; i++) {
+            const rRe = zRe[i], rIm = zIm[i];
+            for (let k = i + 1; k >= 1; k--) {
+              const prodRe = cRe[k - 1] * rRe - cIm[k - 1] * rIm;
+              const prodIm = cRe[k - 1] * rIm + cIm[k - 1] * rRe;
+              cRe[k] -= prodRe;
+              cIm[k] -= prodIm;
+            }
+          }
+          return cRe;
+        }
+        
+        static computeFormantRoots(logArea, fs = 44100) {
+          const area = new Float64Array(logArea.length);
+          for (let i = 0; i < logArea.length; i++) area[i] = Math.exp(logArea[i]);
+          const k = VocalTractModel.areaToReflection(area);
+          let allSmall = true;
+          for (let i = 0; i < k.length; i++) {
+            if (Math.abs(k[i]) >= 1e-7) { allSmall = false; break; }
+          }
+          if (allSmall) {
+            return {
+              freqs: new Float64Array([500, 1500, 2500, 3500, 4500]),
+              bws:   new Float64Array([1200, 1400, 1300, 1200, 1500]),
+              zRe:   new Float64Array(0),
+              zIm:   new Float64Array(0)
+            };
+          }
+          const alp = VocalTractModel.reflectionToLpc(k);
+          const { re, im } = VocalTractModel.polyRootsAberth(alp);
+          const n = re.length;
+          const freqs = new Float64Array(n);
+          const bws   = new Float64Array(n);
+          for (let i = 0; i < n; i++) {
+            const magR = Math.max(Math.hypot(re[i], im[i]), 1e-6);
+            const ang  = Math.atan2(im[i], re[i]);
+            freqs[i]   = (ang / Math.PI) * (fs / 2.0);
+            bws[i]     = Math.max(1.0, (-Math.log(magR) / Math.PI) * fs);
+          }
+          return { freqs, bws, zRe: re, zIm: im };
+        }
+        
+        static computeLSF(logArea, fs = 44100) {
+          const nSection = logArea.length - 1;
+          const area = new Float64Array(logArea.length);
+          for (let i = 0; i < logArea.length; i++) area[i] = Math.exp(logArea[i]);
+          const k = VocalTractModel.areaToReflection(area);
+          let allSmall = true;
+          for (let i = 0; i < k.length; i++) {
+            if (Math.abs(k[i]) >= 1e-7) { allSmall = false; break; }
+          }
+          if (allSmall) {
+            const fallback = new Float64Array(nSection);
+            for (let i = 0; i < nSection; i++) fallback[i] = ((i + 0.5) / nSection) * (fs / 2.0);
+            return fallback;
+          }
+          
+          const alp = VocalTractModel.reflectionToLpc(k);
+          const p = alp.length - 1;
+          const P = new Float64Array(p + 2);
+          const Q = new Float64Array(p + 2);
+          P[0] = 1.0; Q[0] = 1.0;
+          for (let i = 1; i <= p; i++) {
+            P[i] = alp[i] + alp[p + 1 - i];
+            Q[i] = alp[i] - alp[p + 1 - i];
+          }
+          P[p + 1] = 1.0;
+          Q[p + 1] = -1.0;
+          
+          const evalSym = (poly, isAntiSym, omega) => {
+            let sum = 0.0;
+            const len = poly.length;
+            const mid = (len - 1) / 2.0;
+            for (let idx = 0; idx < Math.floor(len / 2); idx++) {
+              const order = mid - idx;
+              sum += poly[idx] * (isAntiSym ? Math.sin(order * omega) : Math.cos(order * omega));
+            }
+            if (!isAntiSym && (len % 2 === 1)) {
+              sum += 0.5 * poly[Math.floor(len / 2)];
+            }
+            return sum;
+          };
+          
+          const nGrid = 1024;
+          const rootsOmega = [];
+          let prevP = evalSym(P, false, 1e-5);
+          let prevQ = evalSym(Q, true, 1e-5);
+          let prevW = 1e-5;
+          
+          for (let g = 1; g < nGrid; g++) {
+            const w = (g / nGrid) * Math.PI;
+            const curP = evalSym(P, false, w);
+            const curQ = evalSym(Q, true, w);
+            
+            if (prevP * curP <= 0) {
+              let a = prevW, b = w, fa = prevP;
+              for (let it = 0; it < 12; it++) {
+                const m = 0.5 * (a + b);
+                const fm = evalSym(P, false, m);
+                if (fa * fm <= 0) b = m; else { a = m; fa = fm; }
+              }
+              rootsOmega.push(0.5 * (a + b));
+            }
+            if (prevQ * curQ <= 0) {
+              let a = prevW, b = w, fa = prevQ;
+              for (let it = 0; it < 12; it++) {
+                const m = 0.5 * (a + b);
+                const fm = evalSym(Q, true, m);
+                if (fa * fm <= 0) b = m; else { a = m; fa = fm; }
+              }
+              rootsOmega.push(0.5 * (a + b));
+            }
+            prevP = curP; prevQ = curQ; prevW = w;
+          }
+          
+          rootsOmega.sort((a, b) => a - b);
+          const out = new Float64Array(Math.min(nSection, rootsOmega.length));
+          for (let i = 0; i < out.length; i++) {
+            out[i] = (rootsOmega[i] / (2.0 * Math.PI)) * fs;
+          }
+          return out;
+        }
+        
+        static createFourierModifierBasis(xSectionCm) {
+          const N = xSectionCm.length;
+          const xRef = xSectionCm[N - 2];
+          const basisMatrix = Array.from({ length: 7 }, () => new Float64Array(N));
+          for (let r = 0; r < N; r++) {
+            const xBase = (xSectionCm[r] / xRef) * Math.PI;
+            for (let ii = 1; ii <= 3; ii++) {
+              basisMatrix[(ii - 1) * 2][r]     = Math.sin(ii * xBase);
+              basisMatrix[(ii - 1) * 2 + 1][r] = Math.cos(ii * xBase);
+            }
+            basisMatrix[6][r] = 1.0;
+          }
+          const ratios = [1/2, 0, 1/4, 1, 1/6, 2/3, 3/4];
+          const anchorPositions = ratios.map(v => v * xRef);
+          return { basisMatrix, anchorPositions };
+        }
+        
+        static nuttallwin12(N) {
+          if (N <= 1) return new Float64Array([1.0]);
+          const w = new Float64Array(N);
+          const b0 = 0.355768, b1 = -0.487396, b2 = 0.144232, b3 = -0.012604;
+          const scale = (2.0 * Math.PI) / (N - 1);
+          for (let i = 0; i < N; i++) {
+            const x = i * scale;
+            w[i] = b0 + b1 * Math.cos(x) + b2 * Math.cos(2 * x) + b3 * Math.cos(3 * x);
+          }
+          return w;
+        }
+        
+        static stftSpectrogramStructure(x, fs, windowLengthInms, windowShiftInms) {
+          const halfWin = Math.round((windowLengthInms / 1000.0) * fs / 2.0);
+          const winLen = 2 * halfWin + 1;
+          const w = VocalTractModel.nuttallwin12(winLen);
+          const shiftSec = windowShiftInms / 1000.0;
+          const maxTime = (x.length - 1) / fs;
+          const temporalLocations = [];
+          for (let t = 0; t <= maxTime + 1e-9; t += shiftSec) temporalLocations.push(t);
+          
+          const fftl = Math.pow(2, Math.ceil(Math.log2(halfWin) + 2));
+          const nBins = (fftl >> 1) + 1;
+          const nFrames = temporalLocations.length;
+          
+          const rawSgram = Array.from({ length: nFrames }, () => new Float64Array(nBins));
+          let maxPower = 0.0;
+          const re = new Float64Array(fftl);
+          const im = new Float64Array(fftl);
+          
+          for (let f = 0; f < nFrames; f++) {
+            const centerSample = Math.round(temporalLocations[f] * fs);
+            re.fill(0); im.fill(0);
+            for (let k = -halfWin; k <= halfWin; k++) {
+              const idx = Math.min(Math.max(0, centerSample + k), x.length - 1);
+              re[k + halfWin] = x[idx] * w[k + halfWin];
+            }
+            DSPUtils.fft(re, im, false);
+            const col = rawSgram[f];
+            for (let b = 0; b < nBins; b++) {
+              const p = re[b] * re[b] + im[b] * im[b];
+              col[b] = p;
+              if (p > maxPower) maxPower = p;
+            }
+          }
+          
+          const dBspectrogram = Array.from({ length: nFrames }, () => new Float64Array(nBins));
+          const denom = Math.max(maxPower, 1e-30);
+          for (let f = 0; f < nFrames; f++) {
+            for (let b = 0; b < nBins; b++) {
+              dBspectrogram[f][b] = 10.0 * Math.log10(rawSgram[f][b] / denom + 1e-13);
+            }
+          }
+          
+          const frequencyAxis = new Float64Array(nBins);
+          for (let b = 0; b < nBins; b++) frequencyAxis[b] = (b / fftl) * fs;
+          
+          return { dBspectrogram, frequencyAxis, temporalPositions: temporalLocations, samplingFrequency: fs };
+        }
+        
+        static formatAreaTxt(vtl, xLocationCm, logArea) {
+          const nSec = xLocationCm.length - 1;
+          let lines = [];
+          lines.push(`Number of sections: ${String(nSec).padStart(4, " ")}`);
+          lines.push(`Vocal tract length: ${vtl.toFixed(4).padStart(7, " ")}`);
+          lines.push(`List of relative area from lip to glottis`);
+          for (let i = 0; i < nSec; i++) {
+            lines.push(Math.exp(logArea[i]).toFixed(2).padStart(8, " "));
+          }
+          return lines.join("\n") + "\n";
+        }
+        
+        static parseVocalTractFile(text, ext, targetLength, defaultVTL) {
+          const logArea = new Float64Array(targetLength);
+          let vtl = defaultVTL;
+          let lfParams = null;
+          
+          if (ext === "json") {
+            const obj = JSON.parse(text);
+            if (obj.vtLength) vtl = Number(obj.vtLength);
+            if (obj.LFparameters) lfParams = obj.LFparameters;
+            if (Array.isArray(obj.finalAreaFunction)) {
+              const af = obj.finalAreaFunction;
+              if (af.length === targetLength) {
+                for (let i = 0; i < targetLength; i++) logArea[i] = Math.log(Math.max(af[i], 1e-12));
+              } else {
+                const xSrc = af.map((_, i) => i / (af.length - 1));
+                const ySrc = af.map(v => Math.log(Math.max(v, 1e-12)));
+                const xDst = Array.from({ length: targetLength }, (_, i) => i / (targetLength - 1));
+                const interp = DSPUtils.interp1(xSrc, ySrc, xDst);
+                logArea.set(interp);
+              }
+              logArea[targetLength - 1] = 0;
+            }
+          } else {
+            const lines = text.split(/\r?\n/).map(s => s.trim()).filter(s => s.length > 0);
+            if (lines.length >= 4) {
+              const m1 = lines[0].match(/([0-9]+)\s*$/);
+              const m2 = lines[1].match(/([0-9.]+)\s*$/);
+              const nSec = m1 ? parseInt(m1[1], 10) : (lines.length - 3);
+              if (m2) vtl = parseFloat(m2[1]);
+              const tmpArea = [];
+              for (let i = 3; i < Math.min(lines.length, 3 + nSec); i++) {
+                const val = parseFloat(lines[i]);
+                if (!isNaN(val)) tmpArea.push(Math.log(Math.max(val, 1e-12)));
+              }
+              if (tmpArea.length >= 2) {
+                const nTargetSec = targetLength - 1;
+                const xSrc = tmpArea.map((_, i) => i / (tmpArea.length - 1));
+                const xDst = Array.from({ length: nTargetSec }, (_, i) => i / (nTargetSec - 1));
+                const interp = DSPUtils.interp1(xSrc, tmpArea, xDst);
+                for (let i = 0; i < nTargetSec; i++) logArea[i] = interp[i];
+                logArea[targetLength - 1] = 0;
+              }
+            }
+          }
+          return { logArea, vtl, lfParams };
+        }
+      }
+      VocalTractModel.WindowCoeff6T = new Float64Array([
+        0.2624710164, 0.4265335164, 0.2250165621,
+        0.0726831633, 0.0125124215, 0.0007833203
+      ]);
+      VocalTractModel.ModalPreset   = [0.4134, 0.5530, 0.0041, 0.5817];
+      VocalTractModel.FryPreset     = [0.4808, 0.5955, 0.0269, 0.7200];
+      VocalTractModel.BreathyPreset = [0.4621, 0.6604, 0.0270, 0.7712];
+      
+      /* ============================================================================
+ * 2. CLASS 2: LFSourceModel (Analytical Antialiased L-F Source & Equalizers)
+ * ============================================================================ */
+      class LFSourceModel {
+        static getCachedEqualizer() {
+          if (!LFSourceModel.cachedEqStr) {
+            LFSourceModel.cachedEqStr = LFSourceModel.equalizerDesignAAFX(
+              VocalTractModel.WindowCoeff6T, 68, 80, 1.5
+            );
+          }
+          return LFSourceModel.cachedEqStr;
+        }
+        
+        static synthesizeFromF0Trajectory(f0In, timeAxis, fs, tp, te, ta, tc, jitterSD = 0, shimmerSD = 0, perturbation = "gaussian") {
+          const t0 = timeAxis[0], tEnd = timeAxis[timeAxis.length - 1];
+          const nSamples = Math.floor((tEnd - t0) * fs) + 1;
+          const tt = new Float64Array(nSamples);
+          for (let i = 0; i < nSamples; i++) tt[i] = t0 + i / fs;
+          
+          const logF0In = new Float64Array(f0In.length);
+          for (let i = 0; i < f0In.length; i++) logF0In[i] = Math.log(Math.max(f0In[i], 1e-12));
+          const interpLogF0 = DSPUtils.interp1(timeAxis, logF0In, tt);
+          const f0 = new Float64Array(nSamples);
+          for (let i = 0; i < nSamples; i++) f0[i] = Math.exp(interpLogF0[i]);
+          
+          const pvPhase = new Float64Array(nSamples);
+          let theta = 0.0;
+          const twoPiOverFs = (2.0 * Math.PI) / fs;
+          for (let i = 0; i < nSamples; i++) {
+            theta += twoPiOverFs * f0[i];
+            pvPhase[i] = Math.atan2(Math.sin(theta), Math.cos(theta));
+          }
+          
+          const startPointList = [];
+          for (let i = 0; i < nSamples - 1; i++) {
+            if (pvPhase[i + 1] - pvPhase[i] < -5.0) startPointList.push(i);
+          }
+          
+          const outSignal = new Float64Array(nSamples);
+          const directOut = new Float64Array(nSamples);
+          const directVV  = new Float64Array(nSamples);
+          const Tw = 4.0 / fs;
+          
+          const modelParam = LFSourceModel.generateLFmodelParameter(tp, te, ta, tc);
+          
+          let lastPoint = 0;
+          for (let ii = 0; ii < startPointList.length - 2; ii++) {
+            const p0 = lastPoint + 1;
+            const p1 = startPointList[ii];
+            const p2 = startPointList[ii + 1];
+            const p3 = startPointList[ii + 2];
+            const spanLen = p3 - p0 + 1;
+            if (spanLen <= 0) continue;
+            
+            const normalizedTime = new Float64Array(spanLen);
+            const jitterOffset = jitterSD * LFSourceModel.perturbationFunction(perturbation);
+            let k = 0;
+            for (let idx = p0; idx <= p1; idx++, k++) {
+              normalizedTime[k] = (pvPhase[idx] - Math.PI) / (2.0 * Math.PI) + jitterOffset;
+            }
+            for (let idx = p1 + 1; idx <= p2; idx++, k++) {
+              normalizedTime[k] = (pvPhase[idx] + Math.PI) / (2.0 * Math.PI) + jitterOffset;
+            }
+            for (let idx = p2 + 1; idx <= p3; idx++, k++) {
+              normalizedTime[k] = (pvPhase[idx] + 3.0 * Math.PI) / (2.0 * Math.PI) + jitterOffset;
+            }
+            
+            let sumF0 = 0.0;
+            const nMid = p2 - p1;
+            for (let idx = p1 + 1; idx <= p2; idx++) sumF0 += f0[idx];
+            const averageF0 = nMid > 0 ? sumF0 / nMid : f0[p1];
+            const TwNormalized = Tw * averageF0;
+            
+            const modelOut = LFSourceModel.generateAALFmodelOut(normalizedTime, modelParam, TwNormalized);
+            const shimmerGain = 1.0 + shimmerSD * LFSourceModel.perturbationFunction(perturbation);
+            
+            for (let j = 0; j < spanLen; j++) {
+              const destIdx = p0 + j;
+              outSignal[destIdx] += modelOut.antiAliasedSource[j] * shimmerGain;
+              directOut[destIdx] += modelOut.source[j];
+              directVV[destIdx]  += modelOut.volumeVerocity[j];
+            }
+            lastPoint = p1;
+          }
+          
+          const eqStr = LFSourceModel.getCachedEqualizer();
+          const a = eqStr.iirCoefficient;
+          let sumA = 0.0;
+          for (let i = 0; i < a.length; i++) sumA += a[i];
+          const bIIR = new Float64Array([0.0, 0.0, sumA]);
+          const yfix = DSPUtils.filter(bIIR, a, outSignal);
+          
+          return {
+            antiAliasedSignal: yfix,
+            antiAliasedOnly:   outSignal,
+            LFmodelOut:        directOut,
+            LFvolumeVelocity:  directVV,
+            samplingFrequency: fs,
+            f0Interpolated:    f0,
+            temporalPosition:  tt
+          };
+        }
+        
+        static sourceByLFmodelAAF6T(timeAxis, tp, te, ta, tc, Tworg) {
+          const modelParameter = LFSourceModel.generateLFmodelParameter(tp, te, ta, tc);
+          return LFSourceModel.generateAALFmodelOut(timeAxis, modelParameter, Tworg);
+        }
+        
+        static generateLFmodelParameter(tp, te, ta, tc) {
+          const fg = 1.0 / (2.0 * tp);
+          const omegaG = 2.0 * Math.PI * fg;
+          
+          const decayFun = (x) => ta * x - 1.0 + Math.exp(-x * (tc - te));
+          const betaa = DSPUtils.fzero(decayFun, 1.0 / Math.max(ta, 1e-9));
+          
+          const sinWgTe = Math.sin(omegaG * te);
+          const cosWgTe = Math.cos(omegaG * te);
+          const closingAreaTerm = ((tc - te) * Math.exp(-betaa * (tc - te)) - ta) / (betaa * ta);
+          
+          const growthFun = (x) => {
+            const num = -(x * sinWgTe - omegaG * cosWgTe + Math.exp(-x * te) * omegaG);
+            const den = (x * x + omegaG * omegaG) * sinWgTe;
+            return num / den + closingAreaTerm;
+          };
+          const alphaa = DSPUtils.fzero(growthFun, 2.0);
+          
+          return { omegaG, betaa, alphaa, te, tp, ta, tc };
+        }
+        
+        static generateAALFmodelOut(timeAxis, modelParameter, two) {
+          const N = timeAxis.length;
+          const margin = two * 2.0;
+          const { te, ta, tc, alphaa, omegaG, betaa } = modelParameter;
+          
+          const source = new Float64Array(N);
+          const vv     = new Float64Array(N);
+          
+          const sinWgTe = Math.sin(omegaG * te);
+          const cosWgTe = Math.cos(omegaG * te);
+          const cf = -Math.exp(-alphaa * te) / sinWgTe;
+          const denomOpen = (alphaa * alphaa + omegaG * omegaG) * sinWgTe;
+          const boundaryVV = -(alphaa * sinWgTe - omegaG * cosWgTe + omegaG * Math.exp(-alphaa * te)) / denomOpen;
+          const expBetaTcTe = Math.exp(-betaa * (tc - te));
+          
+          const idxOpenList = [];
+          const pieceOpenList = [];
+          const idxCloseList = [];
+          const pieceCloseList = [];
+          
+          for (let i = 0; i < N; i++) {
+            const t = timeAxis[i];
+            if (t > 0 && t < te) {
+              source[i] = cf * Math.exp(alphaa * t) * Math.sin(omegaG * t);
+              vv[i] = -(alphaa * Math.sin(omegaG * t) - omegaG * Math.cos(omegaG * t) + omegaG * Math.exp(-alphaa * t)) / denomOpen;
+            } else if (t >= te && t < tc) {
+              const dt = t - te;
+              source[i] = (-1.0 / (betaa * ta)) * (Math.exp(-betaa * dt) - expBetaTcTe);
+              const closeVV = (dt * expBetaTcTe) / (betaa * ta) + (Math.exp(-betaa * dt) - 1.0) / (betaa * betaa * ta);
+              vv[i] = closeVV + boundaryVV;
+            }
+            
+            if (t > -margin && t < te + margin) {
+              idxOpenList.push(i);
+              pieceOpenList.push(t / te);
+            }
+            if (t >= te - margin && t < tc + margin) {
+              idxCloseList.push(i);
+              pieceCloseList.push((t - te) / (tc - te));
+            }
+          }
+          
+          const antialiasedSignal = new Float64Array(N);
+          
+          if (idxOpenList.length > 0) {
+            const pieceOpen = new Float64Array(pieceOpenList);
+            const twOpen = two / te;
+            const cExpOpen = LFSourceModel.antiAliasedCExponentialSegment(alphaa * te, omegaG * te, pieceOpen, twOpen);
+            for (let k = 0; k < idxOpenList.length; k++) {
+              antialiasedSignal[idxOpenList[k]] += cf * cExpOpen.im[k];
+            }
+          }
+          
+          if (idxCloseList.length > 0) {
+            const pieceClose = new Float64Array(pieceCloseList);
+            const twClose = two / (tc - te);
+            const betaClose = -betaa * (tc - te);
+            const cExpClose = LFSourceModel.antiAliasedCExponentialSegment(betaClose, 0.0, pieceClose, twClose);
+            const tmpPoly   = LFSourceModel.antiAliasedPolynomialSegmentR([1.0, 0.0], pieceClose, twClose);
+            const scaleClose = 1.0 / (betaa * ta);
+            const expB = Math.exp(betaClose);
+            
+            for (let k = 0; k < idxCloseList.length; k++) {
+              const outCloseExp  = -cExpClose.re[k] * scaleClose;
+              const outClosePoly = expB * tmpPoly[k] * scaleClose;
+              antialiasedSignal[idxCloseList[k]] += outCloseExp + outClosePoly;
+            }
+          }
+          
+          return {
+            source,
+            antialiasedSignal,
+            antiAliasedSource: antialiasedSignal,
+            volumeVerocity: vv
+          };
+        }
+        
+        static antiAliasedCExponentialSegment(betRe, betIm, tt, two) {
+          const tw = two * 1.5;
+          const alph = Math.PI / tw;
+          const aa = VocalTractModel.WindowCoeff6T;
+          const M = aa.length;
+          
+          const betSqRe = betRe * betRe - betIm * betIm;
+          const betSqIm = 2.0 * betRe * betIm;
+          const wRe = new Float64Array(M);
+          const wIm = new Float64Array(M);
+          const kAlphArr = new Float64Array(M);
+          const altSign  = new Float64Array(M);
+          
+          for (let k = 0; k < M; k++) {
+            const ka = k * alph;
+            kAlphArr[k] = ka;
+            altSign[k] = (k % 2 === 0) ? 1.0 : -1.0;
+            const dRe = ka * ka + betSqRe;
+            const dIm = betSqIm;
+            const dMagSq = dRe * dRe + dIm * dIm;
+            wRe[k] = (aa[k] * dRe) / dMagSq;
+            wIm[k] = (-aa[k] * dIm) / dMagSq;
+          }
+          
+          let sumAltWRe = 0.0, sumAltWIm = 0.0;
+          for (let k = 0; k < M; k++) {
+            sumAltWRe += altSign[k] * wRe[k];
+            sumAltWIm += altSign[k] * wIm[k];
+          }
+          const betAltWRe = betRe * sumAltWRe - betIm * sumAltWIm;
+          const betAltWIm = betRe * sumAltWIm + betIm * sumAltWRe;
+          
+          const ePosMag = Math.exp(betRe * tw), eNegMag = Math.exp(-betRe * tw);
+          const dExpRe = ePosMag * Math.cos(betIm * tw) - eNegMag * Math.cos(-betIm * tw);
+          const dExpIm = ePosMag * Math.sin(betIm * tw) - eNegMag * Math.sin(-betIm * tw);
+          const intFactorRe = betAltWRe * dExpRe - betAltWIm * dExpIm;
+          const intFactorIm = betAltWRe * dExpIm + betAltWIm * dExpRe;
+          
+          const expBetMag = Math.exp(betRe);
+          const expBetRe  = expBetMag * Math.cos(betIm);
+          const expBetIm  = expBetMag * Math.sin(betIm);
+          
+          const N = tt.length;
+          const outRe = new Float64Array(N);
+          const outIm = new Float64Array(N);
+          const norm = 1.0 / (2.0 * tw * aa[0]);
+          
+          for (let i = 0; i < N; i++) {
+            const t = tt[i];
+            let accRe = 0.0, accIm = 0.0;
+            
+            if (t >= tw && t <= tw + 1.0) {
+              const em = Math.exp(betRe * t);
+              const er = em * Math.cos(betIm * t);
+              const ei = em * Math.sin(betIm * t);
+              accRe += er * intFactorRe - ei * intFactorIm;
+              accIm += er * intFactorIm + ei * intFactorRe;
+            }
+            
+            if (Math.abs(t) < tw) {
+              let s1Re = 0.0, s1Im = 0.0;
+              for (let k = 0; k < M; k++) {
+                const ka = kAlphArr[k];
+                const sinVal = Math.sin(t * ka) * ka;
+                const cosVal = Math.cos(t * ka);
+                const termRe = sinVal - cosVal * betRe;
+                const termIm = -cosVal * betIm;
+                s1Re += termRe * wRe[k] - termIm * wIm[k];
+                s1Im += termRe * wIm[k] + termIm * wRe[k];
+              }
+              const em = Math.exp(betRe * (t + tw));
+              const er = em * Math.cos(betIm * (t + tw));
+              const ei = em * Math.sin(betIm * (t + tw));
+              s1Re += er * betAltWRe - ei * betAltWIm;
+              s1Im += er * betAltWIm + ei * betAltWRe;
+              accRe += s1Re;
+              accIm += s1Im;
+            }
+            
+            if (Math.abs(1.0 - t) <= tw) {
+              const dt = t - 1.0;
+              let trigRe = 0.0, trigIm = 0.0;
+              for (let k = 0; k < M; k++) {
+                const ka = kAlphArr[k];
+                const sinVal = Math.sin(dt * ka) * ka;
+                const cosVal = Math.cos(dt * ka);
+                const termRe = sinVal - cosVal * betRe;
+                const termIm = -cosVal * betIm;
+                trigRe += termRe * wRe[k] - termIm * wIm[k];
+                trigIm += termRe * wIm[k] + termIm * wRe[k];
+              }
+              let s3Re = expBetRe * trigRe - expBetIm * trigIm;
+              let s3Im = expBetRe * trigIm + expBetIm * trigRe;
+              
+              const em = Math.exp(betRe * (tw + t));
+              const er = em * Math.cos(betIm * (tw + t));
+              const ei = em * Math.sin(betIm * (tw + t));
+              s3Re += er * betAltWRe - ei * betAltWIm;
+              s3Im += er * betAltWIm + ei * betAltWRe;
+              
+              accRe -= s3Re;
+              accIm -= s3Im;
+            }
+            
+            outRe[i] = accRe * norm;
+            outIm[i] = accIm * norm;
+          }
+          return { re: outRe, im: outIm };
+        }
+        
+        static antiAliasedPolynomialSegmentR(poly_coeff, tt, two) {
+          const tw = two * 1.5;
+          const hcRaw = VocalTractModel.WindowCoeff6T;
+          const m = hcRaw.length - 1;
+          const hc = new Float64Array(hcRaw.length);
+          const norm = 1.0 / (2.0 * tw * hcRaw[0]);
+          for (let i = 0; i < hcRaw.length; i++) hc[i] = hcRaw[i] * norm;
+          
+          const n = poly_coeff.length - 1;
+          const C = Array.from({ length: n + 1 }, () => new Float64Array(m));
+          const S = Array.from({ length: n + 1 }, () => new Float64Array(m));
+          const U = Array.from({ length: n + 1 }, () => new Float64Array(n + 2));
+          const V = Array.from({ length: n + 1 }, () => new Float64Array(n + 1));
+          
+          const altSignM = new Float64Array(m);
+          for (let k = 1; k <= m; k++) altSignM[k - 1] = (k % 2 === 1) ? -1.0 : 1.0;
+          
+          const negTwPow  = new Float64Array(n + 1);
+          const posTwPowU = new Float64Array(n + 2);
+          const posTwPowV = new Float64Array(n);
+          for (let j = 1; j <= n + 1; j++) negTwPow[j - 1] = Math.pow(-tw, j);
+          for (let j = 0; j <= n + 1; j++) posTwPowU[j] = Math.pow(tw, j);
+          for (let j = 1; j <= n; j++) posTwPowV[j - 1] = Math.pow(tw, j);
+          
+          for (let k = 1; k <= m; k++) S[0][k - 1] = (tw / (k * Math.PI)) * hc[k];
+          U[0][1] = hc[0];
+          let dotNeg = 0.0;
+          for (let j = 1; j <= n + 1; j++) dotNeg += U[0][j] * negTwPow[j - 1];
+          U[0][0] = -dotNeg;
+          V[0][0] = 1.0;
+          
+          for (let r = 1; r <= n; r++) {
+            for (let k = 1; k <= m; k++) {
+              const scaleK = (r * tw) / (k * Math.PI);
+              C[r][k - 1] = -scaleK * S[r - 1][k - 1];
+              S[r][k - 1] =  scaleK * C[r - 1][k - 1];
+            }
+            let uNegDot = 0.0;
+            for (let j = 1; j <= n + 1; j++) {
+              U[r][j] = (r / j) * U[r - 1][j - 1];
+              uNegDot += U[r][j] * negTwPow[j - 1];
+            }
+            let cAltDot = 0.0;
+            for (let k = 0; k < m; k++) cAltDot += C[r][k] * altSignM[k];
+            U[r][0] = -(uNegDot + cAltDot);
+            
+            let vPosDot = 0.0;
+            for (let j = 1; j <= n; j++) {
+              V[r][j] = (r / j) * V[r - 1][j - 1];
+              vPosDot += V[r][j] * posTwPowV[j - 1];
+            }
+            let uPosDot = 0.0;
+            for (let j = 0; j <= n + 1; j++) uPosDot += U[r][j] * posTwPowU[j];
+            V[r][0] = cAltDot + uPosDot - vPosDot;
+          }
+          
+          const B = Array.from({ length: n + 1 }, () => new Float64Array(n + 1));
+          for (let ii = 0; ii <= n; ii++) {
+            B[ii][0] = 1.0;
+            for (let jj = 1; jj <= ii; jj++) {
+              B[ii][jj] = B[ii - 1][jj - 1] + B[ii - 1][jj];
+            }
+          }
+          
+          const pRow = poly_coeff;
+          const pRowB = new Float64Array(n + 1);
+          for (let j = 0; j <= n; j++) {
+            let s = 0.0;
+            for (let i = 0; i <= n; i++) s += pRow[i] * B[i][j];
+            pRowB[j] = s;
+          }
+          
+          const mulRowMat = (row, mat, cols) => {
+            const res = new Float64Array(cols);
+            for (let c = 0; c < cols; c++) {
+              let s = 0.0;
+              for (let r = 0; r <= n; r++) s += row[r] * mat[r][c];
+              res[c] = s;
+            }
+            return res;
+          };
+          
+          const c0 = mulRowMat(pRow, C, m);
+          const s0 = mulRowMat(pRow, S, m);
+          const u0 = mulRowMat(pRow, U, n + 2);
+          const v  = mulRowMat(pRow, V, n + 1);
+          const c1 = mulRowMat(pRowB, C, m);
+          const s1 = mulRowMat(pRowB, S, m);
+          const u1 = mulRowMat(pRowB, U, n + 2);
+          
+          const N = tt.length;
+          const output = new Float64Array(N);
+          const piOverTw = Math.PI / tw;
+          
+          for (let i = 0; i < N; i++) {
+            const t = tt[i];
+            if (t > -tw && t <= tw) {
+              let g1 = 0.0;
+              for (let k = 1; k <= m; k++) {
+                const ang = piOverTw * t * k;
+                g1 += Math.cos(ang) * c0[k - 1] + Math.sin(ang) * s0[k - 1];
+              }
+              let tPow = 1.0;
+              for (let j = 0; j <= n + 1; j++) {
+                g1 += tPow * u0[j];
+                tPow *= t;
+              }
+              output[i] += g1;
+            }
+            if (t > tw && t <= 1.0 - tw) {
+              let g2 = 0.0, tPow = 1.0;
+              for (let j = 0; j <= n; j++) {
+                g2 += tPow * v[j];
+                tPow *= t;
+              }
+              output[i] += g2;
+            }
+            if (t > 1.0 - tw && t <= 1.0 + tw) {
+              const dt = t - 1.0;
+              let trig = 0.0;
+              for (let k = 1; k <= m; k++) {
+                const ang = piOverTw * dt * k;
+                trig += Math.cos(ang) * c1[k - 1] + Math.sin(ang) * s1[k - 1];
+              }
+              let dtPow = 1.0;
+              for (let j = 0; j <= n + 1; j++) {
+                trig += dtPow * u1[j];
+                dtPow *= dt;
+              }
+              if (tw > 1.0 - tw) {
+                output[i] -= trig;
+              } else {
+                let polyV = 0.0, tPow = 1.0;
+                for (let j = 0; j <= n; j++) {
+                  polyV += tPow * v[j];
+                  tPow *= t;
+                }
+                output[i] += polyV - trig;
+              }
+            }
+            if (tw > 1.0 - tw && t > tw && t <= 1.0 + tw) {
+              let polyV = 0.0, tPow = 1.0;
+              for (let j = 0; j <= n; j++) {
+                polyV += tPow * v[j];
+                tPow *= t;
+              }
+              output[i] += polyV;
+            }
+          }
+          return output;
+        }
+        
+        static equalizerDesignAAFX(cosineCoefficient, upperLimit, halfSample, scale = 1.0) {
+          const fs = 8000;
+          const Tw = 4.0 / fs;
+          const fftl = 4096;
+          const ak = cosineCoefficient;
+          const M = ak.length;
+          
+          const sinc = (x) => Math.abs(x) < 1e-12 ? 1.0 : Math.sin(Math.PI * x) / (Math.PI * x);
+          const hh = new Float64Array(fftl);
+          
+          for (let i = 0; i < fftl; i++) {
+            let fx = (i / fftl) * fs;
+            if (fx > fs / 2.0) fx -= fs;
+            const omg = 2.0 * Math.PI * fx * scale;
+            const base = (omg * Tw) / Math.PI;
+            let s = 0.0;
+            for (let k = 0; k < M; k++) {
+              s += (sinc(base + k) + sinc(base - k)) * ak[k];
+            }
+            hh[i] = s / (2.0 * ak[0]);
+          }
+          hh[0] = 1.0;
+          
+          const hhdd = new Float64Array(fftl);
+          for (let i = 0; i <= fftl / 2; i++) hhdd[i] = Math.abs(hh[i]);
+          for (let i = 1; i < fftl / 2; i++) hhdd[fftl - i] = hhdd[i];
+          
+          const maxG = Math.pow(10.0, upperLimit / 20.0);
+          const ggRe = new Float64Array(fftl);
+          for (let i = 0; i < fftl; i++) {
+            ggRe[i] = Math.min(maxG, 1.0 / Math.max(hhdd[i], 1e-15));
+          }
+          
+          const ihhRe = new Float64Array(ggRe);
+          const ihhIm = new Float64Array(fftl);
+          DSPUtils.fft(ihhRe, ihhIm, true);
+          
+          const hl = halfSample;
+          const ww = VocalTractModel.nuttallwin12(2 * hl + 1);
+          const eqqh = new Float64Array(2 * hl + 1);
+          let sumEqqh = 0.0;
+          for (let k = -hl; k <= hl; k++) {
+            const idx = (k + fftl) % fftl;
+            const val = ihhRe[idx] * ww[k + hl];
+            eqqh[k + hl] = val;
+            sumEqqh += val;
+          }
+          for (let i = 0; i < eqqh.length; i++) eqqh[i] /= sumEqqh;
+          
+          const cepRe = new Float64Array(fftl);
+          const cepIm = new Float64Array(fftl);
+          for (let i = 0; i < fftl; i++) cepRe[i] = Math.log(ggRe[i]);
+          DSPUtils.fft(cepRe, cepIm, true);
+          
+          for (let i = 1; i < fftl / 2; i++) { cepRe[i] *= 2.0; cepIm[i] *= 2.0; }
+          for (let i = fftl / 2 + 1; i < fftl; i++) { cepRe[i] = 0.0; cepIm[i] = 0.0; }
+          DSPUtils.fft(cepRe, cepIm, false);
+          for (let i = 0; i < fftl; i++) {
+            const em = Math.exp(cepRe[i]);
+            const ang = cepIm[i];
+            cepRe[i] = em * Math.cos(ang);
+            cepIm[i] = em * Math.sin(ang);
+          }
+          DSPUtils.fft(cepRe, cepIm, true);
+          const mmResp = cepRe;
+          
+          const hl2 = Math.round(hl * 1.36);
+          const ww2 = VocalTractModel.nuttallwin12(2 * hl2 + 1);
+          const minPhaseW = new Float64Array(hl2 + 1);
+          let sumMinP = 0.0;
+          for (let i = 0; i <= hl2; i++) {
+            minPhaseW[i] = mmResp[i] * ww2[hl2 + i];
+            sumMinP += minPhaseW[i];
+          }
+          for (let i = 0; i <= hl2; i++) minPhaseW[i] /= sumMinP;
+          
+          const eqRe = new Float64Array(fftl);
+          const eqIm = new Float64Array(fftl);
+          for (let i = 0; i < eqqh.length; i++) eqRe[i] = eqqh[i];
+          DSPUtils.fft(eqRe, eqIm, false);
+          for (let i = 0; i < fftl; i++) {
+            eqRe[i] = eqRe[i] * eqRe[i] + eqIm[i] * eqIm[i];
+            eqIm[i] = 0.0;
+          }
+          DSPUtils.fft(eqRe, eqIm, true);
+          const r = new Float64Array(7);
+          for (let i = 0; i < 7; i++) r[i] = eqRe[i] / eqRe[0];
+          const a = DSPUtils.levinson(r);
+          
+          return {
+            response: eqqh,
+            iirCoefficient: a,
+            minimumPhaseResponseW: minPhaseW
+          };
+        }
+        
+        static perturbationFunction(perturbation = "gaussian") {
+          LFSourceModel.perturbationState++;
+          switch (perturbation) {
+            case "gaussian": {
+              const u1 = Math.max(Math.random(), 1e-12);
+              const u2 = Math.random();
+              return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+            }
+            case "P0MRandom":
+            return Math.round((Math.random() - 0.5) * 2.9999);
+            case "Alteration":
+            return 1 - 2 * (LFSourceModel.perturbationState % 2);
+            default:
+            return 0.0;
+          }
+        }
+      }
+      LFSourceModel.cachedEqStr = null;
+      LFSourceModel.perturbationState = 0;
+      
+      /* ============================================================================
+ * 3. CLASS 3: VTShapeToSoundApp (Main Vocal Tract UI & 3D Renderer)
+ * ============================================================================ */
+      class VTShapeToSoundApp {
+        constructor() {
+          this.SamplingFrequency = 44100;
+          this.VTLengthNominal   = 17.0;
+          this.SoundSpeed        = 35000;
+          this.NSection          = Math.ceil(this.VTLengthNominal * 2 / this.SoundSpeed * this.SamplingFrequency);
+          this.LogArea           = new Float64Array(this.NSection + 1);
+          this.LogAreaDeviation  = new Float64Array(this.NSection + 1);
+          this.VTLengthReference = (this.NSection / 2) * this.SoundSpeed / this.SamplingFrequency;
+          this.VTLength          = this.VTLengthReference;
+          
+          this.F0                = 125.0;
+          this.Duration          = 1.0;
+          this.VibratoDepth      = 50.0;
+          this.VibratoFrequency  = 5.5;
+          this.VariableF0        = "off";
+          this.ReleaseToPlay     = false;
+          this.CurrentVQName     = "modal";
+          
+          this.LFparameters      = VocalTractModel.getPresetLFParameters("modal");
+          this.EqualizerStr      = LFSourceModel.getCachedEqualizer();
+          this.LFDesigner        = null;
+          
+          this.SynthesizedSound  = null;
+          this.MonitoredSound    = null;
+          this.InputSegment      = null;
+          
+          this.DefaultMaxArea    = Math.log(256);
+          this.DefaultBottomLvl  = Math.log(0.5);
+          this.XSectCm = new Float64Array(this.NSection + 1);
+          this.XNodeCm = new Float64Array(this.NSection + 1);
+          for (let i = 0; i <= this.NSection; i++) {
+            this.XSectCm[i] = (i + 0.5) * this.SoundSpeed / this.SamplingFrequency / 2.0;
+            this.XNodeCm[i] = i * this.SoundSpeed / this.SamplingFrequency / 2.0;
+          }
+          
+          const basisObj = VocalTractModel.createFourierModifierBasis(this.XNodeCm);
+          this.ModifierBasis      = basisObj.basisMatrix;
+          this.ModifierHandleList = basisObj.anchorPositions.map(v => v + 0.5 * this.SoundSpeed / this.SamplingFrequency / 2.0);
+          this.CoefficientList    = new Float64Array([1, 1, 1, 1, 1, 1, 1]);
+          this.ModifierComposite  = new Float64Array(this.NSection + 1);
+          this.MagnifierValue     = 0.0;
+          this.recomputeCompositeBasis();
+          
+          // Spectral & Pole State
+          this.TransferFx      = new Float64Array(0);
+          this.TransferGaindB  = new Float64Array(0);
+          this.PoleFreqs       = new Float64Array(0);
+          this.PoleBWs         = new Float64Array(0);
+          this.RootsRe         = new Float64Array(0);
+          this.RootsIm         = new Float64Array(0);
+          this.LSFVec          = new Float64Array(0);
+          this.TotalEnvFx      = null;
+          this.TotalEnvY       = null;
+          this.ShowHarmonics   = false;
+          
+          // Animated STFT Slice State
+          this.AnimSliceFx     = null;
+          this.AnimSliceY      = null;
+          this.SpectrumTimer   = null;
+          
+          // Live Monitor State
+          this.InSpecFx        = null;
+          this.InSpecY         = null;
+          this.MonitorActive   = false;
+          this.IsRecordingMonitor = false;
+          this.MonitorStream   = null;
+          this.MonitorProcessor = null;
+          this.MonitorSource   = null;
+          this.MonitorZeroGain = null;
+          this.MonitorTimer    = null;
+          this.AudioRecordCount = 200;
+          
+          // Interaction State
+          this.DragMode        = "none";
+          this.SelectedMarkerIndex = 0;
+          this.SelectedPair    = [0, 1];
+          this.PoleMarkerVisible = false;
+          this.PoleMarkerFreq  = 500;
+          this.PoleMarkerBW    = 100;
+          this.TracePts        = [];
+          this.ModTracePts     = [];
+          this.CameraCounter   = 0;
+          
+          this.bindDOM();
+          this.updatePlots();
+          this.syncVTL(this.VTLength);
+          this.start3DRotationLoop();
+        }
+        
+        recomputeCompositeBasis() {
+          const N = this.NSection + 1;
+          let maxAbs = 0.0;
+          for (let r = 0; r < N; r++) {
+            let s = 0.0;
+            for (let c = 0; c < 7; c++) s += this.ModifierBasis[c][r] * this.CoefficientList[c];
+            this.ModifierComposite[r] = s;
+            if (Math.abs(s) > maxAbs) maxAbs = Math.abs(s);
+          }
+          if (maxAbs > 1.0) {
+            for (let r = 0; r < N; r++) this.ModifierComposite[r] /= maxAbs;
+          }
+        }
+        
+        bindDOM() {
+          this.cvVTDrawer = document.getElementById("cvVTDrawer");
+          this.cvSlider   = document.getElementById("cvSlider");
+          this.cvModifier = document.getElementById("cvModifier");
+          this.cvGainPlot = document.getElementById("cvGainPlot");
+          this.cvVT3d     = document.getElementById("cvVT3d");
+          
+          this.padVT   = { l: 54, r: 14, t: 14, b: 38 };
+          this.padGain = { l: 48, r: 54, t: 14, b: 38 };
+          this.padMod  = { l: 6,  r: 6,  t: 6,  b: 6 };
+          this.padSlid = { l: 6,  r: 6,  t: 8,  b: 8 };
+          
+          this.setupCanvasEvents(this.cvVTDrawer, "vt");
+          this.setupCanvasEvents(this.cvGainPlot, "gain");
+          this.setupCanvasEvents(this.cvSlider,   "slider");
+          this.setupCanvasEvents(this.cvModifier, "mod");
+          
+          document.getElementById("btnResetVT").onclick = () => this.onResetVT();
+          document.getElementById("btnModReset").onclick = () => this.onModifierReset();
+          document.getElementById("btnShowAllBasis").onclick = () => this.onShowAllBasis();
+          document.getElementById("btnResetVTL").onclick = () => {
+            this.syncVTL(this.VTLengthReference);
+            if (this.ReleaseToPlay) this.soundItBody();
+          };
+          document.getElementById("numVTL").onchange = (e) => {
+            const v = Math.max(8, Math.min(35, parseFloat(e.target.value) || this.VTLengthReference));
+            this.syncVTL(v);
+            if (this.ReleaseToPlay) this.soundItBody();
+          };
+          
+          document.getElementById("btnSourceReset").onclick = () => this.onSourceReset();
+          document.getElementById("numF0").onchange = () => this.onSourceParamChanged();
+          document.getElementById("numVibRate").onchange = () => this.onSourceParamChanged();
+          document.getElementById("numVibDepth").onchange = () => this.onSourceParamChanged();
+          document.getElementById("selDuration").onchange = () => this.onSourceParamChanged();
+          document.getElementById("selNoteName").onchange = () => this.onNoteNameChanged();
+          document.getElementById("selVoiceQuality").onchange = () => this.onVoiceQualityChanged();
+          
+          document.getElementById("numPoleFreq").onchange = () => this.onPoleEditChanged();
+          document.getElementById("numPoleBW").onchange = () => this.onPoleEditChanged();
+          
+          document.getElementById("btnSoundIt").onclick = () => this.soundItBody();
+          document.getElementById("chkReleaseToPlay").onchange = (e) => {
+            this.ReleaseToPlay = e.target.checked;
+            if (this.ReleaseToPlay) this.soundItBody();
+          };
+          document.getElementById("btnResetAllVT").onclick = () => {
+            this.onModifierReset();
+            this.onResetVT();
+            this.syncVTL(this.VTLengthReference);
+            this.onSourceReset();
+          };
+          
+          const btnSave = document.getElementById("btnSaveVT");
+          const menuSave = document.getElementById("menuSaveVT");
+          btnSave.onclick = (e) => {
+            e.stopPropagation();
+            menuSave.classList.toggle("open");
+          };
+          window.addEventListener("click", () => menuSave.classList.remove("open"));
+          
+          document.getElementById("btnExportWav24").onclick = () => this.exportFiles(true, false, false);
+          document.getElementById("btnExportTxtVT").onclick = () => this.exportFiles(false, true, false);
+          document.getElementById("btnExportJsonVT").onclick = () => this.exportFiles(false, false, true);
+          document.getElementById("btnExportAllVT").onclick = () => this.exportFiles(true, true, true);
+          
+          const fileInput = document.getElementById("fileLoadVT");
+          document.getElementById("btnLoadVT").onclick = () => fileInput.click();
+          fileInput.onchange = (e) => this.handleFileLoad(e);
+          
+          // Microphone Monitor
+          document.getElementById("chkMonitor").onchange = (e) => this.onMonitorToggled(e.target.checked);
+          document.getElementById("btnMonStart").onclick = () => this.startMonitor();
+          document.getElementById("btnMonStop").onclick  = () => this.stopMonitor();
+          document.getElementById("btnMonPlay").onclick  = () => {
+            if (this.MonitoredSound && this.MonitoredSound.length > 100) {
+              let maxAbs = 0;
+              for (let i = 0; i < this.MonitoredSound.length; i++) {
+                if (Math.abs(this.MonitoredSound[i]) > maxAbs) maxAbs = Math.abs(this.MonitoredSound[i]);
+              }
+              const norm = new Float64Array(this.MonitoredSound.length);
+              const g = maxAbs > 0 ? 0.95 / maxAbs : 1.0;
+              for (let i = 0; i < norm.length; i++) norm[i] = this.MonitoredSound[i] * g;
+              DSPUtils.playSignal(norm, this.SamplingFrequency);
+            }
+          };
+        }
+        
+        getAxisToPx(cv, pad, xlim, ylim) {
+          const w = cv.width - pad.l - pad.r;
+          const h = cv.height - pad.t - pad.b;
+          return {
+            x2p: (x) => pad.l + ((x - xlim[0]) / (xlim[1] - xlim[0])) * w,
+            y2p: (y) => pad.t + (1.0 - (y - ylim[0]) / (ylim[1] - ylim[0])) * h,
+            p2x: (px) => xlim[0] + ((px - pad.l) / w) * (xlim[1] - xlim[0]),
+            p2y: (py) => ylim[0] + (1.0 - (py - pad.t) / h) * (ylim[1] - ylim[0]),
+            w, h
+          };
+        }
+        
+        getVTYLim() {
+          let maxA = this.DefaultMaxArea, minA = this.DefaultBottomLvl;
+          for (let i = 0; i < this.LogArea.length; i++) {
+            if (this.LogArea[i] > maxA) maxA = this.LogArea[i];
+            if (this.LogArea[i] < minA) minA = this.LogArea[i];
+          }
+          return [minA, maxA];
+        }
+        
+        getGainLeftYLim() {
+          let maxG = -100;
+          for (let i = 0; i < this.TransferFx.length; i++) {
+            if (this.TransferFx[i] < 5000 && this.TransferGaindB[i] > maxG) {
+              maxG = this.TransferGaindB[i];
+            }
+          }
+          if (maxG < -60) maxG = 0;
+          return [maxG - 80, maxG + 5];
+        }
+        
+        getGainRightYLim() {
+          return [-Math.log10(1100), -Math.log10(1)];
+        }
+        
+        /* ==========================================================================
+   * Interactive Pointer Events
+   * ========================================================================== */
+        setupCanvasEvents(canvas, areaName) {
+          const getCoords = (clientX, clientY) => {
+            const rect = canvas.getBoundingClientRect();
+            return [
+              (clientX - rect.left) * (canvas.width / rect.width),
+              (clientY - rect.top) * (canvas.height / rect.height)
+            ];
+          };
+          if (window.PointerEvent) {
+            canvas.addEventListener("pointermove", (e) => {
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerMove(areaName, px, py, canvas);
+            });
+            canvas.addEventListener("pointerdown", (e) => {
+              try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerDown(areaName, px, py, canvas);
+            });
+            const onEnd = (e) => {
+              try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+              this.onPointerUp();
+            };
+            canvas.addEventListener("pointerup", onEnd);
+            canvas.addEventListener("pointercancel", onEnd);
+          } else {
+            canvas.addEventListener("touchstart", (e) => {
+              if (e.touches.length > 0) {
+                e.preventDefault();
+                const [px, py] = getCoords(e.touches[0].clientX, e.touches[0].clientY);
+                this.onPointerDown(areaName, px, py, canvas);
+              }
+            }, { passive: false });
+            canvas.addEventListener("touchmove", (e) => {
+              if (e.touches.length > 0) {
+                e.preventDefault();
+                const [px, py] = getCoords(e.touches[0].clientX, e.touches[0].clientY);
+                this.onPointerMove(areaName, px, py, canvas);
+              }
+            }, { passive: false });
+            canvas.addEventListener("touchend", () => this.onPointerUp());
+            canvas.addEventListener("touchcancel", () => this.onPointerUp());
+            canvas.addEventListener("mousemove", (e) => {
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerMove(areaName, px, py, canvas);
+            });
+            canvas.addEventListener("mousedown", (e) => {
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerDown(areaName, px, py, canvas);
+            });
+            window.addEventListener("mouseup", () => this.onPointerUp());
+          }
+        }
+        
+        onPointerMove(areaName, px, py, canvas) {
+          if (this.DragMode === "none") {
+            this.handleHover(areaName, px, py, canvas);
+            return;
+          }
+          
+          if (this.DragMode === "vtl") {
+            const map = this.getAxisToPx(this.cvVTDrawer, this.padVT, [0, 18], this.getVTYLim());
+            const xPos = Math.max(2.0, Math.min(17.8, map.p2x(px)));
+            const vtl = Math.max(8.0, Math.min(35.0, (8.0 / xPos) * this.VTLengthReference));
+            this.syncVTL(vtl);
+          } else if (this.DragMode === "vtdraw") {
+            const map = this.getAxisToPx(this.cvVTDrawer, this.padVT, [0, 18], this.getVTYLim());
+            this.TracePts.push([map.p2x(px), map.p2y(py)]);
+            this.drawVTDrawer();
+          } else if (this.DragMode === "pole") {
+            const map = this.getAxisToPx(this.cvGainPlot, this.padGain, [0, 5000], this.getGainRightYLim());
+            const freq = Math.max(50, Math.min(4950, map.p2x(px)));
+            const bw   = Math.max(2, Math.min(1500, Math.pow(10.0, -map.p2y(py))));
+            this.updateParametersFromRoots(freq, bw);
+          } else if (this.DragMode === "slider") {
+            const map = this.getAxisToPx(this.cvSlider, this.padSlid, [-1, 1], [-4.2, 4.2]);
+            const val = Math.max(-4.0, Math.min(4.0, map.p2y(py)));
+            this.MagnifierValue = val;
+            for (let i = 0; i <= this.NSection; i++) {
+              this.LogArea[i] = this.LogAreaDeviation[i] + this.ModifierComposite[i] * val;
+            }
+            this.LogArea[this.NSection] = 0.0;
+            this.updatePlots();
+          } else if (this.DragMode === "modcomp") {
+            const map = this.getAxisToPx(this.cvModifier, this.padMod, [0, 18], [-1.2, 1.2]);
+            const cVal = Math.max(-1.2, Math.min(1.2, map.p2y(py)));
+            this.CoefficientList[this.SelectedMarkerIndex] = cVal;
+            this.recomputeCompositeBasis();
+            for (let i = 0; i <= this.NSection; i++) {
+              this.LogArea[i] = this.LogAreaDeviation[i] + this.ModifierComposite[i] * this.MagnifierValue;
+            }
+            this.LogArea[this.NSection] = 0.0;
+            this.updatePlots();
+          } else if (this.DragMode === "moddraw") {
+            const map = this.getAxisToPx(this.cvModifier, this.padMod, [0, 18], [-1.2, 1.2]);
+            this.ModTracePts.push([map.p2x(px), map.p2y(py)]);
+            this.drawModifierAxis();
+          }
+        }
+        
+        handleHover(areaName, px, py, canvas) {
+          if (areaName === "vt") {
+            this.setPoleReadoutVisible(false);
+            const map = this.getAxisToPx(this.cvVTDrawer, this.padVT, [0, 18], this.getVTYLim());
+            const x = map.p2x(px);
+            const vtlHandleX = 8.0 * (this.VTLengthReference / this.VTLength);
+            canvas.style.cursor = Math.abs(x - vtlHandleX) < 0.35 ? "ew-resize" : "crosshair";
+          } else if (areaName === "gain") {
+            const map = this.getAxisToPx(this.cvGainPlot, this.padGain, [0, 5000], this.getGainRightYLim());
+            const x = map.p2x(px), y = map.p2y(py);
+            let minDist = 999;
+            for (let i = 0; i < this.PoleFreqs.length; i++) {
+              if (this.PoleFreqs[i] <= 0 || this.PoleFreqs[i] > 5000) continue;
+              const yr = -Math.log10(Math.max(this.PoleBWs[i], 1));
+              const d = Math.hypot(((this.PoleFreqs[i] - x) / 5000) * 2.0, (yr - y) / 3.04);
+              if (d < minDist) minDist = d;
+            }
+            canvas.style.cursor = minDist < 0.045 ? "pointer" : "crosshair";
+          } else if (areaName === "slider") {
+            this.setPoleReadoutVisible(false);
+            const map = this.getAxisToPx(this.cvSlider, this.padSlid, [-1, 1], [-4.2, 4.2]);
+            const y = map.p2y(py);
+            canvas.style.cursor = Math.abs(y - this.MagnifierValue) < 0.45 ? "ns-resize" : "crosshair";
+          } else if (areaName === "mod") {
+            this.setPoleReadoutVisible(false);
+            const map = this.getAxisToPx(this.cvModifier, this.padMod, [0, 18], [-1.2, 1.2]);
+            const x = map.p2x(px), y = map.p2y(py);
+            let minD = 999, bestIdx = 0;
+            for (let i = 0; i < 7; i++) {
+              const dx = ((x - this.ModifierHandleList[i]) / 18.0) * 6.0;
+              const dy = y - this.CoefficientList[i];
+              const d = Math.hypot(dx, dy);
+              if (d < minD) { minD = d; bestIdx = i; }
+            }
+            if (minD < 0.16) {
+              this.SelectedMarkerIndex = bestIdx;
+              canvas.style.cursor = "pointer";
+            } else {
+              canvas.style.cursor = "crosshair";
+            }
+          }
+        }
+        
+        onPointerDown(areaName, px, py, canvas) {
+          this.handleHover(areaName, px, py, canvas);
+          if (areaName === "vt") {
+            const map = this.getAxisToPx(this.cvVTDrawer, this.padVT, [0, 18], this.getVTYLim());
+            const x = map.p2x(px), y = map.p2y(py);
+            const vtlHandleX = 8.0 * (this.VTLengthReference / this.VTLength);
+            if (Math.abs(x - vtlHandleX) < 0.35) {
+              this.DragMode = "vtl";
+            } else {
+              this.DragMode = "vtdraw";
+              this.TracePts = [[x, y]];
+            }
+          } else if (areaName === "gain" && canvas.style.cursor === "pointer") {
+            const map = this.getAxisToPx(this.cvGainPlot, this.padGain, [0, 5000], this.getGainRightYLim());
+            const x = map.p2x(px), y = map.p2y(py);
+            
+            const area = new Float64Array(this.LogArea.length);
+            for (let i = 0; i < area.length; i++) area[i] = Math.exp(this.LogArea[i]);
+            const k = VocalTractModel.areaToReflection(area);
+            if (k.every(v => Math.abs(v) < 1e-7)) {
+              this.LogArea[0] = 0.05;
+            }
+            const rootInfo = VocalTractModel.computeFormantRoots(this.LogArea, this.SamplingFrequency);
+            this.PoleFreqs = rootInfo.freqs;
+            this.PoleBWs   = rootInfo.bws;
+            this.RootsRe   = rootInfo.zRe;
+            this.RootsIm   = rootInfo.zIm;
+            
+            let minDist = 999, minIdx = 0;
+            for (let i = 0; i < this.PoleFreqs.length; i++) {
+              const yr = -Math.log10(Math.max(this.PoleBWs[i], 1));
+              const d = Math.hypot(((this.PoleFreqs[i] - x) / 5000) * 2.0, (yr - y) / 3.04);
+              if (d < minDist) { minDist = d; minIdx = i; }
+            }
+            let conjIdx = minIdx, minConjDist = 999;
+            for (let i = 0; i < this.RootsRe.length; i++) {
+              if (i === minIdx) continue;
+              const d = Math.hypot(this.RootsRe[i] - this.RootsRe[minIdx], this.RootsIm[i] + this.RootsIm[minIdx]);
+              if (d < minConjDist) { minConjDist = d; conjIdx = i; }
+            }
+            this.SelectedPair = [minIdx, conjIdx];
+            const scale = this.VTLengthReference / this.VTLength;
+            document.getElementById("numPoleFreq").value = (this.PoleFreqs[minIdx] * scale).toFixed(1);
+            document.getElementById("numPoleBW").value   = (this.PoleBWs[minIdx] * scale).toFixed(1);
+            this.PoleMarkerFreq = this.PoleFreqs[minIdx];
+            this.PoleMarkerBW   = this.PoleBWs[minIdx];
+            this.setPoleReadoutVisible(true);
+            this.DragMode = "pole";
+            this.drawGainPlot();
+          } else if (areaName === "slider" && canvas.style.cursor === "ns-resize") {
+            this.DragMode = "slider";
+            this.drawSliderAxis();
+          } else if (areaName === "mod") {
+            const map = this.getAxisToPx(this.cvModifier, this.padMod, [0, 18], [-1.2, 1.2]);
+            if (canvas.style.cursor === "pointer") {
+              this.DragMode = "modcomp";
+              this.drawModifierAxis();
+            } else {
+              this.DragMode = "moddraw";
+              this.ModTracePts = [[map.p2x(px), map.p2y(py)]];
+            }
+          }
+        }
+        
+        onPointerUp() {
+          if (this.DragMode === "none") return;
+          const prev = this.DragMode;
+          this.DragMode = "none";
+          
+          if (prev === "vtdraw" && this.TracePts.length >= 2) {
+            this.applyFreehandTraceToVT(this.TracePts);
+            this.TracePts = [];
+            this.updatePlots();
+          } else if (prev === "moddraw" && this.ModTracePts.length >= 2) {
+            this.applyFreehandTraceToMod(this.ModTracePts);
+            this.ModTracePts = [];
+            this.updatePlots();
+          } else {
+            this.updatePlots();
+          }
+          
+          document.getElementById("btnSaveVT").disabled = true;
+          if (this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        applyFreehandTraceToVT(pts) {
+          const sorted = pts.slice().sort((a, b) => a[0] - b[0]);
+          const uX = [], uY = [];
+          for (let i = 0; i < sorted.length; i++) {
+            if (i === 0 || sorted[i][0] - uX[uX.length - 1] > 1e-4) {
+              uX.push(sorted[i][0]);
+              uY.push(sorted[i][1]);
+            }
+          }
+          if (uX.length >= 2) {
+            let minX = uX[0];
+            if (minX < this.XSectCm[1] / 2.0) minX = -1.0;
+            const maxX = uX[uX.length - 1];
+            for (let i = 0; i < this.NSection; i++) {
+              const x = this.XSectCm[i];
+              if (x > minX && x < maxX) {
+                this.LogArea[i] = DSPUtils.interp1Scalar(uX, uY, x);
+              }
+            }
+            this.LogArea[this.NSection] = 0.0;
+          }
+        }
+        
+        applyFreehandTraceToMod(pts) {
+          const sorted = pts.slice().sort((a, b) => a[0] - b[0]);
+          const uX = [], uY = [];
+          for (let i = 0; i < sorted.length; i++) {
+            if (i === 0 || sorted[i][0] - uX[uX.length - 1] > 1e-4) {
+              uX.push(sorted[i][0]);
+              uY.push(Math.max(-1.2, Math.min(1.2, sorted[i][1])));
+            }
+          }
+          if (uX.length >= 2) {
+            const minX = uX[0], maxX = uX[uX.length - 1];
+            for (let i = 0; i <= this.NSection; i++) {
+              const x = this.XSectCm[i];
+              if (x >= minX && x <= maxX) {
+                this.ModifierComposite[i] = DSPUtils.interp1Scalar(uX, uY, x);
+              }
+              this.LogAreaDeviation[i] = this.LogArea[i] - this.ModifierComposite[i] * this.MagnifierValue;
+            }
+          }
+        }
+        
+        setPoleReadoutVisible(visible) {
+          this.PoleMarkerVisible = visible;
+          const disp = visible ? "block" : "none";
+          document.getElementById("lblPoleFreq").style.display = disp;
+          document.getElementById("numPoleFreq").style.display = disp;
+          document.getElementById("lblPoleBW").style.display   = disp;
+          document.getElementById("numPoleBW").style.display   = disp;
+          this.drawGainPlot();
+        }
+        
+        /* ==========================================================================
+   * State & Plot Synchronization
+   * ========================================================================== */
+        updateParametersFromRoots(frequency, bandWidth) {
+          const fs = this.SamplingFrequency;
+          const mag = Math.exp((-bandWidth / fs) * Math.PI);
+          const ang = (frequency / fs) * 2.0 * Math.PI;
+          const rRe = mag * Math.cos(ang);
+          const rIm = mag * Math.sin(ang);
+          
+          const scale = this.VTLengthReference / this.VTLength;
+          document.getElementById("numPoleFreq").value = (frequency * scale).toFixed(1);
+          document.getElementById("numPoleBW").value   = (bandWidth * scale).toFixed(1);
+          
+          const [p1, p2] = this.SelectedPair;
+          this.RootsRe[p1] = rRe; this.RootsIm[p1] = rIm;
+          this.RootsRe[p2] = rRe; this.RootsIm[p2] = -rIm;
+          this.PoleFreqs[p1] = frequency;  this.PoleBWs[p1] = bandWidth;
+          this.PoleFreqs[p2] = -frequency; this.PoleBWs[p2] = bandWidth;
+          this.PoleMarkerFreq = frequency;
+          this.PoleMarkerBW   = bandWidth;
+          
+          const predictorTmp = VocalTractModel.polyFromRoots(this.RootsRe, this.RootsIm);
+          const { gaindB, fx, logArea } = VocalTractModel.predictorToAreaAndGain(predictorTmp, fs);
+          this.TransferFx = fx;
+          this.TransferGaindB = gaindB;
+          this.LogArea = logArea;
+          
+          for (let i = 0; i <= this.NSection; i++) {
+            this.LogAreaDeviation[i] = this.LogArea[i] - this.ModifierComposite[i] * this.MagnifierValue;
+          }
+          this.LSFVec = VocalTractModel.computeLSF(this.LogArea, fs);
+          if (this.LFDesigner) {
+            this.updateTotalEnvelope(this.LFDesigner.LFmodelGenericFaxis, this.LFDesigner.LFmodelGenericSpectrum);
+          }
+          this.renderAllCanvases();
+        }
+        
+        updatePlots() {
+          const fs = this.SamplingFrequency;
+          for (let i = 0; i <= this.NSection; i++) {
+            this.LogAreaDeviation[i] = this.LogArea[i] - this.ModifierComposite[i] * this.MagnifierValue;
+          }
+          const tf = VocalTractModel.computeTransferFunction(this.LogArea, fs);
+          this.TransferFx = tf.fx;
+          this.TransferGaindB = tf.gaindB;
+          
+          const rootsObj = VocalTractModel.computeFormantRoots(this.LogArea, fs);
+          this.PoleFreqs = rootsObj.freqs;
+          this.PoleBWs   = rootsObj.bws;
+          this.RootsRe   = rootsObj.zRe;
+          this.RootsIm   = rootsObj.zIm;
+          
+          this.LSFVec = VocalTractModel.computeLSF(this.LogArea, fs);
+          
+          if (this.LFDesigner) {
+            this.updateTotalEnvelope(this.LFDesigner.LFmodelGenericFaxis, this.LFDesigner.LFmodelGenericSpectrum);
+          }
+          this.renderAllCanvases();
+        }
+        
+        updateTotalEnvelope(genericFaxis, genericSpectrum) {
+          if (!genericFaxis || !genericSpectrum || genericFaxis.length === 0) return;
+          const f0Base = this.F0;
+          const vtl = this.VTLength;
+          const vtlRef = this.VTLengthReference;
+          const N = this.TransferFx.length;
+          const modelFaxis = new Float64Array(N);
+          const querySrcF  = new Float64Array(N);
+          const queryVTF   = new Float64Array(N);
+          
+          for (let i = 0; i < N; i++) {
+            modelFaxis[i] = (this.TransferFx[i] / vtl) * vtlRef;
+            querySrcF[i]  = modelFaxis[i] * (vtlRef / vtl);
+            queryVTF[i]   = modelFaxis[i] * (vtl / vtlRef);
+          }
+          
+          const lvlAtF0 = DSPUtils.interp1Scalar(genericFaxis, genericSpectrum, 1.0);
+          const srcX = new Float64Array(genericFaxis.length);
+          const srcY = new Float64Array(genericSpectrum.length);
+          for (let i = 0; i < genericFaxis.length; i++) {
+            srcX[i] = genericFaxis[i] * f0Base;
+            srcY[i] = genericSpectrum[i] - lvlAtF0;
+          }
+          
+          const sourceGain   = DSPUtils.interp1(srcX, srcY, querySrcF);
+          const scaledVTgain = DSPUtils.interp1(this.TransferFx, this.TransferGaindB, queryVTF);
+          
+          this.TotalEnvFx = modelFaxis;
+          this.TotalEnvY  = new Float64Array(N);
+          for (let i = 0; i < N; i++) {
+            this.TotalEnvY[i] = scaledVTgain[i] + sourceGain[i];
+          }
+        }
+        
+        syncVTL(vtl) {
+          this.VTLength = Math.abs(vtl);
+          document.getElementById("numVTL").value = this.VTLength.toFixed(2);
+          if (this.LFDesigner) {
+            this.updateTotalEnvelope(this.LFDesigner.LFmodelGenericFaxis, this.LFDesigner.LFmodelGenericSpectrum);
+          }
+          this.renderAllCanvases();
+        }
+        
+        onLFDesignerUpdated(lfParams, f0Base, genericFaxis, genericSpectrum) {
+          this.LFparameters = { ...lfParams };
+          if (this.VariableF0 === "on") {
+            this.F0 = f0Base;
+            document.getElementById("numF0").value = f0Base.toFixed(1);
+          }
+          this.updateTotalEnvelope(genericFaxis, genericSpectrum);
+          this.drawGainPlot();
+        }
+        
+        onLFDesignerRelease() {
+          if (this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        /* ==========================================================================
+   * Canvas Rendering Methods
+   * ========================================================================== */
+        renderAllCanvases() {
+          this.drawVTDrawer();
+          this.drawModifierAxis();
+          this.drawSliderAxis();
+          this.drawGainPlot();
+          this.drawVT3d();
+        }
+        
+        drawVTDrawer() {
+          const cv = this.cvVTDrawer;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const ylim = this.getVTYLim();
+          const xlim = [0, 18];
+          const map = this.getAxisToPx(cv, this.padVT, xlim, ylim);
+          const ratio = this.VTLengthReference / this.VTLength;
+          
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(this.padVT.l, this.padVT.t, map.w, map.h);
+          ctx.clip();
+          
+          ctx.strokeStyle = "rgba(0, 0, 220, 0.35)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          for (let ii = 1; ii <= 35; ii++) {
+            const gx = map.x2p(ii * ratio);
+            ctx.beginPath(); ctx.moveTo(gx, this.padVT.t); ctx.lineTo(gx, this.padVT.t + map.h); ctx.stroke();
+          }
+          for (let ii = -5; ii <= 12; ii++) {
+            const gy = map.y2p(Math.log(Math.pow(2, ii)));
+            ctx.beginPath(); ctx.moveTo(this.padVT.l, gy); ctx.lineTo(this.padVT.l + map.w, gy); ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          
+          const vtlX = map.x2p(8.0 * ratio);
+          ctx.strokeStyle = "#00cccc";
+          ctx.lineWidth = this.DragMode === "vtl" ? 5 : 3;
+          ctx.beginPath(); ctx.moveTo(vtlX, this.padVT.t); ctx.lineTo(vtlX, this.padVT.t + map.h); ctx.stroke();
+          
+          ctx.strokeStyle = "#00cc00";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          for (let i = 0; i <= this.NSection; i++) {
+            const px = map.x2p(this.XNodeCm[i]);
+            const py = map.y2p(this.ModifierComposite[i] * this.MagnifierValue + Math.log(16));
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          
+          ctx.strokeStyle = "#0000ee";
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          for (let i = 0; i <= this.NSection; i++) {
+            const px = map.x2p(this.XSectCm[i]);
+            const py = map.y2p(this.LogArea[i]);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          
+          for (let i = 0; i <= this.NSection; i++) {
+            const px = map.x2p(this.XSectCm[i]);
+            const py = map.y2p(this.LogArea[i]);
+            ctx.beginPath();
+            ctx.arc(px, py, 3.2, 0, 2 * Math.PI);
+            ctx.stroke();
+          }
+          
+          if (this.TracePts.length > 1) {
+            ctx.strokeStyle = "#00bb00";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < this.TracePts.length; i++) {
+              const px = map.x2p(this.TracePts[i][0]);
+              const py = map.y2p(this.TracePts[i][1]);
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+          
+          ctx.strokeStyle = "#0000cc";
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(this.padVT.l, this.padVT.t, map.w, map.h);
+          
+          ctx.fillStyle = "#111";
+          ctx.font = "12px sans-serif";
+          ctx.textAlign = "center";
+          const xTicks = [5, 10, 15, 20, 25, 30, 35];
+          for (let t of xTicks) {
+            const xVal = t * ratio;
+            if (xVal >= 0 && xVal <= 18) {
+              const px = map.x2p(xVal);
+              ctx.fillText(String(t), px, this.padVT.t + map.h + 14);
+            }
+          }
+          ctx.font = "13px sans-serif";
+          ctx.fillText("distance from lip (cm)", this.padVT.l + map.w / 2, cv.height - 5);
+          
+          ctx.textAlign = "right";
+          ctx.font = "11.5px sans-serif";
+          const yTickExps = [-3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+          const yTickLabels = ["0.125","0.25","0.5","1","2","4","8","16","32","64","128","256","512","1024","2048","4096"];
+          for (let i = 0; i < yTickExps.length; i++) {
+            const yVal = Math.log(Math.pow(2, yTickExps[i]));
+            if (yVal >= ylim[0] - 0.01 && yVal <= ylim[1] + 0.01) {
+              const py = map.y2p(yVal);
+              ctx.fillText(yTickLabels[i], this.padVT.l - 5, py + 4);
+            }
+          }
+          
+          ctx.save();
+          ctx.translate(13, this.padVT.t + map.h / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textAlign = "center";
+          ctx.font = "13px sans-serif";
+          ctx.fillText("relative area", 0, 0);
+          ctx.restore();
+        }
+        
+        drawModifierAxis() {
+          const cv = this.cvModifier;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const map = this.getAxisToPx(cv, this.padMod, [0, 18], [-1.2, 1.2]);
+          const ratio = this.VTLengthReference / this.VTLength;
+          const colors = ["#0072bd", "#d95319", "#edb120", "#7e2f8e", "#77ac30", "#4dbeee", "#a2142f"];
+          
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(this.padMod.l, this.padMod.t, map.w, map.h);
+          ctx.clip();
+          
+          ctx.strokeStyle = "rgba(0,0,0,0.22)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 2]);
+          for (let g = 0; g <= 35; g++) {
+            const px = map.x2p(g * ratio);
+            ctx.beginPath(); ctx.moveTo(px, this.padMod.t); ctx.lineTo(px, this.padMod.t + map.h); ctx.stroke();
+          }
+          ctx.setLineDash([]);
+          ctx.strokeStyle = "rgba(0,0,0,0.45)";
+          for (let g = 5; g <= 35; g += 5) {
+            const px = map.x2p(g * ratio);
+            ctx.beginPath(); ctx.moveTo(px, this.padMod.t); ctx.lineTo(px, this.padMod.t + map.h); ctx.stroke();
+          }
+          
+          const y0 = map.y2p(0);
+          ctx.strokeStyle = "#000";
+          ctx.beginPath(); ctx.moveTo(this.padMod.l, y0); ctx.lineTo(this.padMod.l + map.w, y0); ctx.stroke();
+          
+          for (let c = 0; c < 7; c++) {
+            ctx.strokeStyle = colors[c];
+            ctx.lineWidth = (this.DragMode === "modcomp" && this.SelectedMarkerIndex === c) ? 3.5 : 1.8;
+            ctx.beginPath();
+            for (let i = 0; i <= this.NSection; i++) {
+              const px = map.x2p(this.XSectCm[i]);
+              const py = map.y2p(this.ModifierBasis[c][i] * this.CoefficientList[c]);
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            
+            const ax = map.x2p(this.ModifierHandleList[c]);
+            const ay = map.y2p(this.CoefficientList[c]);
+            ctx.beginPath();
+            ctx.arc(ax, ay, 4.5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.stroke();
+          }
+          
+          ctx.strokeStyle = "#000";
+          ctx.lineWidth = 3.2;
+          ctx.beginPath();
+          for (let i = 0; i <= this.NSection; i++) {
+            const px = map.x2p(this.XSectCm[i]);
+            const py = map.y2p(this.ModifierComposite[i]);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          
+          if (this.ModTracePts.length > 1) {
+            ctx.strokeStyle = "#00bb00";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < this.ModTracePts.length; i++) {
+              const px = map.x2p(this.ModTracePts[i][0]);
+              const py = map.y2p(this.ModTracePts[i][1]);
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+          ctx.strokeStyle = "#bbb";
+          ctx.strokeRect(this.padMod.l, this.padMod.t, map.w, map.h);
+        }
+        
+        drawSliderAxis() {
+          const cv = this.cvSlider;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const map = this.getAxisToPx(cv, this.padSlid, [-1, 1], [-4.2, 4.2]);
+          const cx = map.x2p(0);
+          const col = this.DragMode === "slider" ? "#00cc00" : "#0000ee";
+          
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 4.5;
+          ctx.beginPath();
+          ctx.moveTo(cx, map.y2p(-4));
+          ctx.lineTo(cx, map.y2p(4));
+          ctx.stroke();
+          
+          const ky = map.y2p(this.MagnifierValue);
+          ctx.beginPath();
+          ctx.moveTo(cx - 9, ky); ctx.lineTo(cx + 9, ky);
+          ctx.moveTo(cx, ky - 9); ctx.lineTo(cx, ky + 9);
+          ctx.stroke();
+        }
+        
+        drawGainPlot() {
+          const cv = this.cvGainPlot;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const xlim = [0, 5000];
+          const ylimL = this.getGainLeftYLim();
+          const ylimR = this.getGainRightYLim();
+          const mapL = this.getAxisToPx(cv, this.padGain, xlim, ylimL);
+          const mapR = this.getAxisToPx(cv, this.padGain, xlim, ylimR);
+          const vtlScale = this.VTLength / this.VTLengthReference;
+          
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(this.padGain.l, this.padGain.t, mapL.w, mapL.h);
+          ctx.clip();
+          
+          ctx.strokeStyle = "rgba(0,0,0,0.14)";
+          ctx.lineWidth = 1;
+          for (let k = 1; k <= 10; k++) {
+            const fx = k * 1000 * vtlScale;
+            if (fx <= 5000) {
+              const px = mapL.x2p(fx);
+              ctx.beginPath(); ctx.moveTo(px, this.padGain.t); ctx.lineTo(px, this.padGain.t + mapL.h); ctx.stroke();
+            }
+          }
+          for (let g = -70; g <= 60; g += 10) {
+            if (g >= ylimL[0] && g <= ylimL[1]) {
+              const py = mapL.y2p(g);
+              ctx.beginPath(); ctx.moveTo(this.padGain.l, py); ctx.lineTo(this.padGain.l + mapL.w, py); ctx.stroke();
+            }
+          }
+          
+          if (this.ShowHarmonics) {
+            ctx.strokeStyle = "rgba(0, 210, 210, 0.55)";
+            ctx.lineWidth = 1;
+            const df = this.F0 * vtlScale;
+            if (df > 20) {
+              ctx.beginPath();
+              for (let f = df; f <= 5000; f += df) {
+                const px = mapL.x2p(f);
+                ctx.moveTo(px, this.padGain.t);
+                ctx.lineTo(px, this.padGain.t + mapL.h);
+              }
+              ctx.stroke();
+            }
+          }
+          
+          ctx.strokeStyle = "rgba(0, 0, 230, 0.55)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          for (let i = 0; i < this.LSFVec.length; i++) {
+            if (this.LSFVec[i] <= 5000) {
+              const px = mapR.x2p(this.LSFVec[i]);
+              ctx.moveTo(px, this.padGain.t);
+              ctx.lineTo(px, this.padGain.t + mapR.h);
+            }
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+          
+          if (this.TotalEnvFx && this.TotalEnvY) {
+            ctx.strokeStyle = "#00b300";
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            let started = false;
+            for (let i = 0; i < this.TotalEnvFx.length; i++) {
+              if (this.TotalEnvFx[i] > 5000) break;
+              const px = mapL.x2p(this.TotalEnvFx[i]);
+              const py = mapL.y2p(this.TotalEnvY[i]);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+          
+          if (this.MonitorActive && this.InSpecFx && this.InSpecY) {
+            ctx.strokeStyle = "#111111";
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            let started = false;
+            for (let i = 0; i < this.InSpecFx.length; i++) {
+              if (this.InSpecFx[i] > 5000) break;
+              const px = mapL.x2p(this.InSpecFx[i]);
+              const py = mapL.y2p(this.InSpecY[i]);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+          
+          if (this.AnimSliceFx && this.AnimSliceY) {
+            ctx.strokeStyle = "#e60000";
+            ctx.lineWidth = 1.3;
+            ctx.beginPath();
+            let started = false;
+            for (let i = 0; i < this.AnimSliceFx.length; i++) {
+              if (this.AnimSliceFx[i] > 5000) break;
+              const px = mapL.x2p(this.AnimSliceFx[i]);
+              const py = mapL.y2p(this.AnimSliceY[i]);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+          
+          ctx.strokeStyle = "#0055cc";
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          for (let i = 0; i < this.TransferFx.length; i++) {
+            if (this.TransferFx[i] > 5000) break;
+            const px = mapL.x2p(this.TransferFx[i]);
+            const py = mapL.y2p(this.TransferGaindB[i]);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          
+          ctx.strokeStyle = "#d95319";
+          ctx.lineWidth = 2;
+          for (let i = 0; i < this.PoleFreqs.length; i++) {
+            const f = this.PoleFreqs[i];
+            const bw = this.PoleBWs[i];
+            if (f > 0 && f <= 5000) {
+              const px = mapR.x2p(f);
+              const py = mapR.y2p(-Math.log10(Math.max(bw, 1.0)));
+              ctx.beginPath();
+              ctx.arc(px, py, 4.2, 0, 2 * Math.PI);
+              ctx.stroke();
+            }
+          }
+          
+          if (this.PoleMarkerVisible) {
+            const px = mapR.x2p(this.PoleMarkerFreq);
+            const py = mapR.y2p(-Math.log10(Math.max(this.PoleMarkerBW, 1.0)));
+            ctx.strokeStyle = "#00bb00";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(px - 10, py); ctx.lineTo(px + 10, py);
+            ctx.moveTo(px, py - 10); ctx.lineTo(px, py + 10);
+            ctx.stroke();
+          }
+          ctx.restore();
+          
+          ctx.strokeStyle = "#222";
+          ctx.lineWidth = 1.1;
+          ctx.strokeRect(this.padGain.l, this.padGain.t, mapL.w, mapL.h);
+          
+          ctx.fillStyle = "#111";
+          ctx.font = "12px sans-serif";
+          ctx.textAlign = "center";
+          for (let k = 1; k <= 10; k++) {
+            const fx = k * 1000 * vtlScale;
+            if (fx >= 0 && fx <= 5000) {
+              ctx.fillText(String(k), mapL.x2p(fx), this.padGain.t + mapL.h + 14);
+            }
+          }
+          ctx.font = "13px sans-serif";
+          ctx.fillText("frequency (kHz)", this.padGain.l + mapL.w / 2, cv.height - 5);
+          
+          ctx.textAlign = "right";
+          ctx.font = "11.5px sans-serif";
+          ctx.fillStyle = "#0055cc";
+          for (let g = -70; g <= 60; g += 10) {
+            if (g >= ylimL[0] && g <= ylimL[1]) {
+              ctx.fillText(String(g), this.padGain.l - 5, mapL.y2p(g) + 4);
+            }
+          }
+          ctx.save();
+          ctx.translate(13, this.padGain.t + mapL.h / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textAlign = "center";
+          ctx.font = "13px sans-serif";
+          ctx.fillText("Gain (dB)", 0, 0);
+          ctx.restore();
+          
+          ctx.textAlign = "left";
+          ctx.font = "11px sans-serif";
+          ctx.fillStyle = "#d95319";
+          const bwTicks  = [2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1];
+          for (let bw of bwTicks) {
+            const yVal = -Math.log10(bw * vtlScale);
+            if (yVal >= ylimR[0] - 0.05 && yVal <= ylimR[1] + 0.05) {
+              ctx.fillText(String(bw), this.padGain.l + mapL.w + 5, mapR.y2p(yVal) + 4);
+            }
+          }
+          ctx.save();
+          ctx.translate(cv.width - 10, this.padGain.t + mapL.h / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textAlign = "center";
+          ctx.font = "13px sans-serif";
+          ctx.fillText("bandwidth (Hz)", 0, 0);
+          ctx.restore();
+        }
+        
+        /* ==========================================================================
+   * Zero-Dependency 2D Canvas 3D Vocal Tract Tube Renderer
+   * ========================================================================== */
+        start3DRotationLoop() {
+          setInterval(() => {
+              this.CameraCounter++;
+              if (document.getElementById("paneVT").classList.contains("active")) {
+                this.drawVT3d();
+              }
+          }, 100);
+        }
+        
+        drawVT3d() {
+          const cv = this.cvVT3d;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const N = this.LogArea.length;
+          const radii = new Float64Array(N);
+          let maxR = 0.0;
+          for (let i = 0; i < N; i++) {
+            radii[i] = Math.exp(this.LogArea[i]);
+            if (radii[i] > maxR) maxR = radii[i];
+          }
+          if (maxR > 0) {
+            for (let i = 0; i < N; i++) radii[i] /= maxR;
+          }
+          
+          const nTheta = 32;
+          const yawOsc = 0.03 * Math.PI * Math.sin((this.CameraCounter / 50.0) * 2.0 * Math.PI);
+          const az = -0.35 + yawOsc;
+          const el = 0.24;
+          const cosA = Math.cos(az), sinA = Math.sin(az);
+          const cosE = Math.cos(el), sinE = Math.sin(el);
+          
+          const cx = cv.width * 0.5;
+          const cy = cv.height * 0.54;
+          const scale = Math.min(cv.width, cv.height) * 0.42;
+          
+          const project = (x, y, z) => {
+            const xc = (x - 0.5) * 1.65;
+            const yc = y * 0.82;
+            const zc = z * 0.82;
+            const x1 = xc * cosA - yc * sinA;
+            const y1 = xc * sinA + yc * cosA;
+            const z2 = zc * cosE - y1 * sinE;
+            const depth = zc * sinE + y1 * cosE;
+            const persp = 3.6 / (3.6 - depth * 0.45);
+            return {
+              px: cx + x1 * scale * persp,
+              py: cy - z2 * scale * persp,
+              depth
+            };
+          };
+          
+          const verts = Array.from({ length: N }, (_, i) => {
+              const x = i / (N - 1);
+              const r = radii[i];
+              const ring = new Array(nTheta);
+              for (let j = 0; j < nTheta; j++) {
+                const th = (2.0 * Math.PI * j) / nTheta;
+                ring[j] = project(x, r * Math.cos(th), r * Math.sin(th));
+              }
+              return ring;
+          });
+          
+          const quads = [];
+          for (let i = 0; i < N - 1; i++) {
+            for (let j = 0; j < nTheta; j++) {
+              const jNext = (j + 1) % nTheta;
+              const v0 = verts[i][j];
+              const v1 = verts[i + 1][j];
+              const v2 = verts[i + 1][jNext];
+              const v3 = verts[i][jNext];
+              const avgDepth = 0.25 * (v0.depth + v1.depth + v2.depth + v3.depth);
+              const thMid = (2.0 * Math.PI * (j + 0.5)) / nTheta;
+              const light = 0.55 + 0.42 * Math.sin(thMid + 0.6);
+              quads.push({ v0, v1, v2, v3, avgDepth, tVal: (i / (N - 1)), light });
+            }
+          }
+          
+          quads.sort((a, b) => a.avgDepth - b.avgDepth);
+          
+          for (let q of quads) {
+            const rCol = Math.round((45 + 155 * q.tVal) * q.light);
+            const gCol = Math.round((130 + 85 * Math.sin(q.tVal * Math.PI)) * q.light);
+            const bCol = Math.round((225 - 110 * q.tVal) * q.light);
+            ctx.fillStyle = `rgb(${rCol},${gCol},${bCol})`;
+            ctx.strokeStyle = "rgba(20, 35, 60, 0.28)";
+            ctx.lineWidth = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(q.v0.px, q.v0.py);
+            ctx.lineTo(q.v1.px, q.v1.py);
+            ctx.lineTo(q.v2.px, q.v2.py);
+            ctx.lineTo(q.v3.px, q.v3.py);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          }
+        }
+        
+        /* ==========================================================================
+   * Audio Synthesis & Animated STFT Spectrum Playback
+   * ========================================================================== */
+        generateExcitationSignal() {
+          const vtl = this.VTLength;
+          const fs = (this.SamplingFrequency / vtl) * this.VTLengthReference;
+          
+          if (this.CurrentVQName === "Design" || this.VariableF0 === "on") {
+            if (!this.LFDesigner) {
+              this.LFDesigner = window.lfApp;
+            }
+            this.LFparameters = { ...this.LFDesigner.LFparameters };
+          }
+          
+          let outStr;
+          if (this.VariableF0 === "off") {
+            const nSamples = Math.floor(this.Duration * fs) + 1;
+            const tt = new Float64Array(nSamples);
+            const f0 = new Float64Array(nSamples);
+            for (let i = 0; i < nSamples; i++) {
+              const t = i / fs;
+              tt[i] = t;
+              f0[i] = Math.pow(2.0, (Math.log2(this.F0) * 12.0 + 0.005 * this.VibratoDepth * Math.sin(2.0 * Math.PI * this.VibratoFrequency * t)) / 12.0);
+            }
+            outStr = LFSourceModel.synthesizeFromF0Trajectory(
+              f0, tt, fs,
+              this.LFparameters.tp, this.LFparameters.te, this.LFparameters.ta, this.LFparameters.tc
+            );
+          } else {
+            outStr = this.LFDesigner.synthesizeFromCurrentTrajectory(fs);
+            this.F0 = outStr.f0Base;
+            document.getElementById("numF0").value = this.F0.toFixed(1);
+          }
+          
+          return DSPUtils.fftfilt(this.EqualizerStr.minimumPhaseResponseW, outStr.antiAliasedSignal);
+        }
+        
+        soundItBody() {
+          const fs = this.SamplingFrequency;
+          const { alp } = VocalTractModel.computeTransferFunction(this.LogArea, fs);
+          const x = this.generateExcitationSignal();
+          let y = DSPUtils.filter([1.0], alp, x);
+          
+          let maxAbsY = 0.0;
+          for (let i = 0; i < y.length; i++) {
+            if (Math.abs(y[i]) > maxAbsY) maxAbsY = Math.abs(y[i]);
+          }
+          if (maxAbsY > 0) {
+            const scale = 0.9 / maxAbsY;
+            for (let i = 0; i < y.length; i++) y[i] *= scale;
+          }
+          
+          const vtl = this.VTLength;
+          if (Math.abs(vtl - this.VTLengthReference) > 1e-3) {
+            const ratio = vtl / this.VTLengthReference;
+            const tScaled = new Float64Array(y.length);
+            for (let i = 0; i < y.length; i++) tScaled[i] = (i / fs) * ratio;
+            const maxT = tScaled[tScaled.length - 1];
+            const nNew = Math.floor(maxT * fs) + 1;
+            const tQuery = new Float64Array(nNew);
+            for (let i = 0; i < nNew; i++) tQuery[i] = i / fs;
+            y = DSPUtils.interp1(tScaled, y, tQuery);
+          }
+          
+          this.SynthesizedSound = y;
+          document.getElementById("btnSaveVT").disabled = false;
+          
+          const windowLengthInms = 60;
+          const windowShiftInms  = 50;
+          const sgramStr = VocalTractModel.stftSpectrogramStructure(y, fs, windowLengthInms, windowShiftInms);
+          const sgramFaxis = sgramStr.frequencyAxis;
+          
+          const dfTF = this.TransferFx[1] - this.TransferFx[0];
+          const f0Idx = Math.max(0, Math.min(this.TransferGaindB.length - 1,
+              Math.round((this.F0 / dfTF) * (vtl / this.VTLengthReference))
+          ));
+          const levelAtF0 = this.TransferGaindB[f0Idx];
+          
+          const nBins = sgramFaxis.length;
+          const dfSgram = sgramFaxis[1] - sgramFaxis[0];
+          const scanIndices = [];
+          for (let d = -4; d <= 4; d++) {
+            const idx = Math.max(0, Math.min(nBins - 1, Math.round(this.F0 / dfSgram + d)));
+            if (!scanIndices.includes(idx)) scanIndices.push(idx);
+          }
+          
+          if (this.SpectrumTimer) {
+            clearInterval(this.SpectrumTimer);
+            this.SpectrumTimer = null;
+          }
+          
+          DSPUtils.playSignal(y, fs);
+          
+          let frameIdx = 0;
+          const nFrames = sgramStr.dBspectrogram.length;
+          const vtlScale = vtl / this.VTLengthReference;
+          const scaledFx = new Float64Array(nBins);
+          for (let b = 0; b < nBins; b++) scaledFx[b] = sgramFaxis[b] * vtlScale;
+          
+          const showNextFrame = () => {
+            if (frameIdx < nFrames) {
+              const col = sgramStr.dBspectrogram[frameIdx];
+              let tmpLvl = -999;
+              for (let idx of scanIndices) {
+                if (col[idx] > tmpLvl) tmpLvl = col[idx];
+              }
+              const slice = new Float64Array(nBins);
+              for (let b = 0; b < nBins; b++) slice[b] = col[b] - tmpLvl + levelAtF0;
+              this.AnimSliceFx = scaledFx;
+              this.AnimSliceY  = slice;
+              this.drawGainPlot();
+              frameIdx++;
+            } else {
+              clearInterval(this.SpectrumTimer);
+              this.SpectrumTimer = null;
+              this.AnimSliceFx = null;
+              this.AnimSliceY  = null;
+              this.drawGainPlot();
+            }
+          };
+          
+          showNextFrame();
+          this.SpectrumTimer = setInterval(showNextFrame, 50);
+        }
+        
+        /* ==========================================================================
+   * UI Control Callbacks
+   * ========================================================================== */
+        onResetVT() {
+          this.LogArea.fill(0.0);
+          for (let i = 0; i <= this.NSection; i++) {
+            this.LogAreaDeviation[i] = this.LogArea[i] - (this.ModifierComposite[i] * this.MagnifierValue + Math.log(16));
+          }
+          this.setPoleReadoutVisible(false);
+          this.updatePlots();
+          if (this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        onModifierReset() {
+          this.MagnifierValue = 0.0;
+          this.CoefficientList.fill(0.0);
+          this.ModifierComposite.fill(0.0);
+          this.LogAreaDeviation.set(this.LogArea);
+          this.updatePlots();
+        }
+        
+        onShowAllBasis() {
+          this.CoefficientList.fill(1.0);
+          this.recomputeCompositeBasis();
+          this.updatePlots();
+        }
+        
+        onPoleEditChanged() {
+          const scale = this.VTLength / this.VTLengthReference;
+          const freq = Math.max(50, Math.min(4950, (parseFloat(document.getElementById("numPoleFreq").value) || 500) * scale));
+          const bw   = Math.max(2, Math.min(1500, (parseFloat(document.getElementById("numPoleBW").value) || 100) * scale));
+          this.updateParametersFromRoots(freq, bw);
+          if (this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        onVoiceQualityChanged() {
+          const val = document.getElementById("selVoiceQuality").value;
+          if (val === "Design") {
+            this.CurrentVQName = "Design";
+            this.ShowHarmonics = true;
+            this.LFDesigner = window.lfApp;
+            this.LFDesigner.setVariableF0Mode(this.VariableF0);
+            this.LFparameters = { ...this.LFDesigner.LFparameters };
+            this.updatePlots();
+            switchTab("lf");
+          } else {
+            this.CurrentVQName = val.toLowerCase();
+            this.LFparameters = VocalTractModel.getPresetLFParameters(this.CurrentVQName);
+            this.updatePlots();
+            if (this.ReleaseToPlay) this.soundItBody();
+          }
+        }
+        
+        onNoteNameChanged() {
+          const val = document.getElementById("selNoteName").value;
+          if (val === "Male") {
+            this.F0 = 125.0;
+            this.VariableF0 = "off";
+          } else if (val === "Female") {
+            this.F0 = 250.0;
+            this.VariableF0 = "off";
+          } else if (val === "Design") {
+            this.VariableF0 = "on";
+            this.CurrentVQName = "Design";
+            document.getElementById("selVoiceQuality").value = "Design";
+            this.ShowHarmonics = true;
+            this.LFDesigner = window.lfApp;
+            this.LFDesigner.setVariableF0Mode("on");
+            switchTab("lf");
+          } else {
+            const semitones = parseFloat(val);
+            this.F0 = 55.0 * Math.pow(2.0, semitones / 12.0);
+            this.VariableF0 = "off";
+          }
+          document.getElementById("numF0").value = this.F0.toFixed(1);
+          this.updatePlots();
+          if (val !== "Design" && this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        onSourceReset() {
+          this.F0 = 125.0;
+          this.Duration = 1.0;
+          this.VibratoDepth = 50.0;
+          this.VibratoFrequency = 5.5;
+          this.VariableF0 = "off";
+          this.CurrentVQName = "modal";
+          this.ShowHarmonics = false;
+          this.TotalEnvFx = null;
+          this.TotalEnvY  = null;
+          
+          document.getElementById("numF0").value = "125.0";
+          document.getElementById("selNoteName").value = "Male";
+          document.getElementById("selVoiceQuality").value = "Modal";
+          document.getElementById("numVibRate").value = "5.50";
+          document.getElementById("numVibDepth").value = "50";
+          document.getElementById("selDuration").value = "1.0";
+          
+          this.LFparameters = VocalTractModel.getPresetLFParameters("modal");
+          if (window.lfApp) window.lfApp.setVariableF0Mode("off");
+          this.updatePlots();
+          if (this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        onSourceParamChanged() {
+          this.F0 = Math.max(55, Math.min(880, parseFloat(document.getElementById("numF0").value) || 125));
+          document.getElementById("numF0").value = this.F0.toFixed(1);
+          this.VibratoFrequency = parseFloat(document.getElementById("numVibRate").value) || 5.5;
+          this.VibratoDepth     = parseFloat(document.getElementById("numVibDepth").value) || 50;
+          this.Duration         = parseFloat(document.getElementById("selDuration").value) || 1.0;
+          this.updatePlots();
+          if (this.ReleaseToPlay) this.soundItBody();
+        }
+        
+        /* ==========================================================================
+   * File Export & Import (.wav 24-bit, .txt, .json) with Native Directory Picker
+   * ========================================================================== */
+        async exportFiles(doWav, doTxt, doJson) {
+          const baseName = "vts" + DSPUtils.timestampStr();
+          const xLoc = Array.from(this.XSectCm, v => (v / this.VTLengthReference) * this.VTLength);
+          const areaFunc = Array.from(this.LogArea, v => Math.exp(v));
+          
+          const items = [];
+          if (doWav && this.SynthesizedSound) {
+            items.push({
+                ext: ".wav",
+                mime: "audio/wav",
+                description: "24-bit PCM WAV Audio (.wav)",
+                blob: DSPUtils.encodeWAV24Bit(this.SynthesizedSound, this.SamplingFrequency)
+            });
+          }
+          if (doTxt) {
+            const txtStr = VocalTractModel.formatAreaTxt(this.VTLength, xLoc, this.LogArea);
+            items.push({
+                ext: ".txt",
+                mime: "text/plain",
+                description: "Vocal Tract Area Function (.txt)",
+                blob: new Blob([txtStr], { type: "text/plain;charset=utf-8" })
+            });
+          }
+          if (doJson) {
+            const stateObj = {
+              vtLength: this.VTLength,
+              finalLocationData: xLoc,
+              finalLogAreaData: Array.from(this.LogArea),
+              finalAreaFunction: areaFunc,
+              LFparameters: this.LFparameters,
+              samplingFrequency: this.SamplingFrequency,
+              lastUpdate: new Date().toISOString()
+            };
+            if (this.MonitorActive && this.InputSegment) {
+              stateObj.inputSegment = Array.from(this.InputSegment);
+            }
+            items.push({
+                ext: ".json",
+                mime: "application/json",
+                description: "Vocal Tract Full State (.json)",
+                blob: new Blob([JSON.stringify(stateObj, null, 2)], { type: "application/json" })
+            });
+          }
+          
+          if (items.length === 1) {
+            const it = items[0];
+            await DSPUtils.saveSingleFileWithDialog(it.blob, baseName + it.ext, it.description, it.mime, it.ext);
+          } else if (items.length > 1) {
+            await DSPUtils.saveBundleToDirectory(baseName, items);
+          }
+        }
+        
+        handleFileLoad(e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          const ext = file.name.split(".").pop().toLowerCase();
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            try {
+              const res = VocalTractModel.parseVocalTractFile(evt.target.result, ext, this.LogArea.length, this.VTLengthReference);
+              this.LogArea.set(res.logArea);
+              if (res.lfParams) this.LFparameters = { ...this.LFparameters, ...res.lfParams };
+              this.syncVTL(res.vtl);
+              this.updatePlots();
+              if (this.ReleaseToPlay) this.soundItBody();
+            } catch (err) {
+              alert("Failed to load file: " + err.message);
+            }
+            e.target.value = "";
+          };
+          reader.readAsText(file);
+        }
+        
+        /* ==========================================================================
+   * Live Microphone Spectrum Monitor (60 ms Nuttall12 Window, 8192-pt FFT)
+   * ========================================================================== */
+        onMonitorToggled(isOn) {
+          this.MonitorActive = isOn;
+          document.getElementById("pnlMonitor").style.display = isOn ? "block" : "none";
+          if (!isOn) {
+            this.stopMonitor();
+            document.getElementById("btnMonStart").disabled = true;
+            this.InSpecFx = null;
+            this.InSpecY  = null;
+            this.drawGainPlot();
+          } else {
+            document.getElementById("btnMonStart").disabled = false;
+            document.getElementById("btnMonStop").disabled  = true;
+          }
+        }
+        
+        async startMonitor() {
+          this.stopMonitor();
+          
+          const btnStart = document.getElementById("btnMonStart");
+          const btnStop  = document.getElementById("btnMonStop");
+          btnStart.disabled = true;
+          btnStop.disabled  = false;
+          this.IsRecordingMonitor = true;
+          
+          try {
+            const ctx = getAudioContext();
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+            });
+            
+            if (!this.IsRecordingMonitor || !this.MonitorActive) {
+              stream.getTracks().forEach(t => t.stop());
+              return;
+            }
+            
+            this.MonitorStream = stream;
+            const source = ctx.createMediaStreamSource(stream);
+            const processor = ctx.createScriptProcessor(2048, 1, 1);
+            
+            const fs = this.SamplingFrequency;
+            const ringLen = Math.round(0.4 * fs);
+            const ringBuf = new Float64Array(ringLen);
+            let writePtr = 0, totalSamples = 0;
+            
+            processor.onaudioprocess = (evt) => {
+              if (!this.IsRecordingMonitor) return;
+              const ch = evt.inputBuffer.getChannelData(0);
+              for (let i = 0; i < ch.length; i++) {
+                ringBuf[writePtr] = ch[i];
+                writePtr = (writePtr + 1) % ringLen;
+                totalSamples++;
+              }
+            };
+            
+            const zeroGain = ctx.createGain();
+            zeroGain.gain.value = 0.0;
+            source.connect(processor);
+            processor.connect(zeroGain);
+            zeroGain.connect(ctx.destination);
+            
+            this.MonitorProcessor = processor;
+            this.MonitorSource    = source;
+            this.MonitorZeroGain  = zeroGain;
+            
+            this.AudioRecordCount = 200;
+            document.getElementById("lblMonCounter").textContent = String(this.AudioRecordCount);
+            
+            const winLen = Math.round(0.06 * fs);
+            const w = VocalTractModel.nuttallwin12(winLen);
+            const fftl = 8192;
+            const re = new Float64Array(fftl);
+            const im = new Float64Array(fftl);
+            
+            this.MonitorTimer = setInterval(() => {
+                if (!this.MonitorActive || !this.IsRecordingMonitor) return;
+                
+                this.AudioRecordCount--;
+                if (this.AudioRecordCount <= 0) {
+                  this.AudioRecordCount = 200;
+                }
+                document.getElementById("lblMonCounter").textContent = String(this.AudioRecordCount);
+                
+                if (totalSamples > winLen) {
+                  const seg = new Float64Array(winLen);
+                  re.fill(0); im.fill(0);
+                  for (let i = 0; i < winLen; i++) {
+                    const idx = (writePtr - winLen + i + ringLen) % ringLen;
+                    seg[i] = ringBuf[idx];
+                    re[i]  = seg[i] * w[i];
+                  }
+                  DSPUtils.fft(re, im, false);
+                  
+                  const vtlScale = this.VTLength / this.VTLengthReference;
+                  const nHalf = fftl >> 1;
+                  const fx = new Float64Array(nHalf);
+                  const pw = new Float64Array(nHalf);
+                  let maxPw = -999;
+                  
+                  for (let i = 0; i < nHalf; i++) {
+                    fx[i] = (i / fftl) * fs * vtlScale;
+                    pw[i] = 10.0 * Math.log10(re[i] * re[i] + im[i] * im[i] + 1e-30);
+                    if (fx[i] < 5000 && pw[i] > maxPw) maxPw = pw[i];
+                  }
+                  
+                  const ylimL = this.getGainLeftYLim();
+                  let topRef = ylimL[1] - 5.0;
+                  if (this.TotalEnvFx && this.TotalEnvY) {
+                    let maxEnv = -999;
+                    for (let i = 0; i < this.TotalEnvFx.length; i++) {
+                      if (this.TotalEnvFx[i] < 5000 && this.TotalEnvY[i] > maxEnv) maxEnv = this.TotalEnvY[i];
+                    }
+                    topRef = maxEnv;
+                  }
+                  
+                  for (let i = 0; i < nHalf; i++) pw[i] = pw[i] - maxPw + topRef;
+                  this.InSpecFx = fx;
+                  this.InSpecY  = pw;
+                  this.InputSegment = seg;
+                  
+                  const monLen = Math.round(0.2 * fs);
+                  const mon = new Float64Array(monLen);
+                  for (let i = 0; i < monLen; i++) {
+                    mon[i] = ringBuf[(writePtr - monLen + i + ringLen) % ringLen];
+                  }
+                  this.MonitoredSound = mon;
+                  document.getElementById("btnMonPlay").disabled = false;
+                  this.drawGainPlot();
+                }
+            }, 100);
+          } catch (err) {
+            this.stopMonitor();
+            alert("Microphone access denied or unavailable: " + err.message);
+          }
+        }
+        
+        stopMonitor() {
+          this.IsRecordingMonitor = false;
+          if (this.MonitorTimer !== null) {
+            clearInterval(this.MonitorTimer);
+            this.MonitorTimer = null;
+          }
+          if (this.MonitorProcessor) {
+            this.MonitorProcessor.onaudioprocess = null;
+            try { this.MonitorProcessor.disconnect(); } catch (e) {}
+            this.MonitorProcessor = null;
+          }
+          if (this.MonitorZeroGain) {
+            try { this.MonitorZeroGain.disconnect(); } catch (e) {}
+            this.MonitorZeroGain = null;
+          }
+          if (this.MonitorSource) {
+            try { this.MonitorSource.disconnect(); } catch (e) {}
+            this.MonitorSource = null;
+          }
+          if (this.MonitorStream) {
+            this.MonitorStream.getTracks().forEach(t => t.stop());
+            this.MonitorStream = null;
+          }
+          document.getElementById("btnMonStart").disabled = !this.MonitorActive;
+          document.getElementById("btnMonStop").disabled  = true;
+        }
+      }
+      
+      /* ============================================================================
+ * 4. CLASS 4: LFModelDesignerApp (Interactive L-F Source & F0 Trajectory UI)
+ * ============================================================================ */
+      class LFModelDesignerApp {
+        constructor(parentApp) {
+          this.ParentApp         = parentApp;
+          this.VariableF0        = "on";
+          this.SamplingFrequency = 44100;
+          this.Duration          = 0.5;
+          this.F0                = 110.0;
+          this.VibratoRate       = 5.5;
+          this.VibratoDepth      = 100.0;
+          
+          const blended = VocalTractModel.getPresetLFParameters("blended");
+          this.FsPlot = 1000;
+          const nDisp = Math.round(1.4 * this.FsPlot) + 1;
+          this.TimeForDisplay = new Float64Array(nDisp);
+          for (let i = 0; i < nDisp; i++) this.TimeForDisplay[i] = -0.2 + i / this.FsPlot;
+          
+          this.LFparameters = {
+            tp: blended.tp,
+            te: blended.te,
+            ta: blended.ta,
+            tc: blended.tc
+          };
+          this.EqualizerStr = LFSourceModel.getCachedEqualizer();
+          
+          this.SketchFs          = 1000;
+          const nSketch          = 4 * this.SketchFs + 1;
+          this.SketchTimeBase    = new Float64Array(nSketch);
+          this.SketchF0          = new Float64Array(nSketch);
+          this.SketchSemitone    = new Float64Array(nSketch);
+          this.SketchF0Base      = this.F0;
+          this.F0BaseKnobVal     = 12.0;
+          this.TimeInF0Reference = 0.25;
+          this.BiasTime          = 1.0;
+          
+          for (let i = 0; i < nSketch; i++) {
+            const t = i / this.SketchFs;
+            this.SketchTimeBase[i] = t;
+            this.SketchF0[i] = this.F0 * Math.pow(2.0, (Math.sin(2.0 * Math.PI * this.VibratoRate * t) * this.VibratoDepth) / 1200.0);
+            this.SketchSemitone[i] = Math.log2(this.SketchF0[i] / 55.0) * 12.0;
+          }
+          
+          this.FFTL = 4096;
+          this.LFmodelGenericFaxis = new Float64Array(this.FFTL);
+          for (let i = 0; i < this.FFTL; i++) this.LFmodelGenericFaxis[i] = (i / this.FFTL) * this.FsPlot;
+          this.RefSpectra = {
+            modal:   this.computeWeightedSpectrum(VocalTractModel.ModalPreset),
+            breathy: this.computeWeightedSpectrum(VocalTractModel.BreathyPreset),
+            fry:     this.computeWeightedSpectrum(VocalTractModel.FryPreset)
+          };
+          
+          this.LFmodelGenericSpectrum = new Float64Array(this.FFTL);
+          this.CurrentWeightedSpec    = new Float64Array(this.FFTL);
+          this.CurrentSourceWave      = new Float64Array(nDisp);
+          this.CurrentVVWave          = new Float64Array(nDisp);
+          this.SourceYLim             = [-1, 1];
+          this.TaTopX                 = 0.6;
+          this.TaBottomY              = -1.0;
+          
+          this.DragMode   = "none";
+          this.HoverParam = "NA";
+          this.F0KnobHit  = false;
+          this.F0TimeHit  = false;
+          this.DraftPts   = [];
+          this.LastSynthesized = null;
+          
+          this.bindDOM();
+          this.updateDisplay();
+        }
+        
+        computeWeightedSpectrum(pArr) {
+          const modelOut = LFSourceModel.sourceByLFmodelAAF6T(this.TimeForDisplay, pArr[0], pArr[1], pArr[2], pArr[3], 0.01);
+          const re = new Float64Array(this.FFTL);
+          const im = new Float64Array(this.FFTL);
+          for (let i = 0; i < modelOut.source.length; i++) re[i] = modelOut.source[i];
+          DSPUtils.fft(re, im, false);
+          
+          const rawSpec = new Float64Array(this.FFTL);
+          const weighted = new Float64Array(this.FFTL);
+          for (let i = 0; i < this.FFTL; i++) {
+            const fx = Math.max(this.LFmodelGenericFaxis[i], 1e-12);
+            rawSpec[i] = 10.0 * Math.log10(re[i] * re[i] + im[i] * im[i] + 1e-30);
+            weighted[i] = rawSpec[i] + 20.0 * Math.log10(fx);
+          }
+          const lvlAtF0 = DSPUtils.interp1Scalar(this.LFmodelGenericFaxis, weighted, 1.0);
+          for (let i = 0; i < this.FFTL; i++) weighted[i] -= lvlAtF0;
+          return { rawSpec, weighted };
+        }
+        
+        bindDOM() {
+          this.cvVV       = document.getElementById("cvLFVV");
+          this.cvSource   = document.getElementById("cvLFSource");
+          this.cvSpectrum = document.getElementById("cvLFSpectrum");
+          this.cvF0Base   = document.getElementById("cvLFF0Base");
+          this.cvF0Paint  = document.getElementById("cvLFF0Paint");
+          
+          this.padVV    = { l: 20, r: 15, t: 18, b: 18 };
+          this.padSrc   = { l: 20, r: 15, t: 15, b: 20 };
+          this.padSpec  = { l: 52, r: 18, t: 32, b: 42 };
+          this.padBase  = { l: 6,  r: 6,  t: 14, b: 26 };
+          this.padPaint = { l: 42, r: 16, t: 14, b: 36 };
+          
+          this.setupEvents(this.cvSource,  "src");
+          this.setupEvents(this.cvF0Base,  "f0base");
+          this.setupEvents(this.cvF0Paint, "f0paint");
+          
+          document.getElementById("btnLFReset").onclick = () => {
+            const b = VocalTractModel.getPresetLFParameters("blended");
+            this.LFparameters = { ...b };
+            document.getElementById("btnLFSave").disabled = true;
+            this.updateDisplay();
+          };
+          document.getElementById("btnLFPlay").onclick = () => this.onPlayButtonPushed();
+          document.getElementById("btnLFSave").onclick = () => this.onSaveButtonPushed();
+          document.getElementById("btnLFBack").onclick = () => switchTab("vt");
+          
+          const fileInput = document.getElementById("fileLoadLF");
+          document.getElementById("btnLFLoad").onclick = () => fileInput.click();
+          fileInput.onchange = (e) => this.onLoadFile(e);
+        }
+        
+        setVariableF0Mode(modeStr) {
+          this.VariableF0 = modeStr;
+          const disp = modeStr === "on" ? "block" : "none";
+          this.cvF0Base.style.display = disp;
+          this.cvF0Paint.style.display = disp;
+          document.getElementById("lblLFF0Base").style.display = disp;
+          this.renderAll();
+        }
+        
+        getAxisToPx(cv, pad, xlim, ylim) {
+          const w = cv.width - pad.l - pad.r;
+          const h = cv.height - pad.t - pad.b;
+          return {
+            x2p: (x) => pad.l + ((x - xlim[0]) / (xlim[1] - xlim[0])) * w,
+            y2p: (y) => pad.t + (1.0 - (y - ylim[0]) / (ylim[1] - ylim[0])) * h,
+            p2x: (px) => xlim[0] + ((px - pad.l) / w) * (xlim[1] - xlim[0]),
+            p2y: (py) => ylim[0] + (1.0 - (py - pad.t) / h) * (ylim[1] - ylim[0]),
+            w, h
+          };
+        }
+        
+        setupEvents(canvas, name) {
+          const getCoords = (clientX, clientY) => {
+            const rect = canvas.getBoundingClientRect();
+            return [
+              (clientX - rect.left) * (canvas.width / rect.width),
+              (clientY - rect.top) * (canvas.height / rect.height)
+            ];
+          };
+          if (window.PointerEvent) {
+            canvas.addEventListener("pointermove", (e) => {
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerMove(name, px, py, canvas);
+            });
+            canvas.addEventListener("pointerdown", (e) => {
+              try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerDown(name, px, py, canvas);
+            });
+            const onEnd = (e) => {
+              try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+              this.onPointerUp();
+            };
+            canvas.addEventListener("pointerup", onEnd);
+            canvas.addEventListener("pointercancel", onEnd);
+          } else {
+            canvas.addEventListener("touchstart", (e) => {
+              if (e.touches.length > 0) {
+                e.preventDefault();
+                const [px, py] = getCoords(e.touches[0].clientX, e.touches[0].clientY);
+                this.onPointerDown(name, px, py, canvas);
+              }
+            }, { passive: false });
+            canvas.addEventListener("touchmove", (e) => {
+              if (e.touches.length > 0) {
+                e.preventDefault();
+                const [px, py] = getCoords(e.touches[0].clientX, e.touches[0].clientY);
+                this.onPointerMove(name, px, py, canvas);
+              }
+            }, { passive: false });
+            canvas.addEventListener("touchend", () => this.onPointerUp());
+            canvas.addEventListener("touchcancel", () => this.onPointerUp());
+            canvas.addEventListener("mousemove", (e) => {
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerMove(name, px, py, canvas);
+            });
+            canvas.addEventListener("mousedown", (e) => {
+              const [px, py] = getCoords(e.clientX, e.clientY);
+              this.onPointerDown(name, px, py, canvas);
+            });
+            window.addEventListener("mouseup", () => this.onPointerUp());
+          }
+        }
+        
+        whichLFParameter(x, y) {
+          const yTol = (this.SourceYLim[1] - this.SourceYLim[0]) * 0.09;
+          if (Math.abs(x - this.LFparameters.tp) < 0.02 && y > 0) return "tp";
+          if (Math.abs(x - this.LFparameters.te) < 0.02 && y < 0) return "te";
+          if (Math.abs(x - this.LFparameters.tc) < 0.02) return "tc";
+          if (Math.abs(x - this.TaTopX) < 0.03 && Math.abs(y - this.SourceYLim[1]) < yTol) return "ta";
+          return "NA";
+        }
+        
+        onPointerMove(name, px, py, canvas) {
+          if (this.DragMode === "none") {
+            this.HoverParam = "NA";
+            this.F0KnobHit  = false;
+            this.F0TimeHit  = false;
+            
+            if (name === "src") {
+              const map = this.getAxisToPx(this.cvSource, this.padSrc, [0, 1], this.SourceYLim);
+              const p = this.whichLFParameter(map.p2x(px), map.p2y(py));
+              this.HoverParam = p;
+              canvas.style.cursor = p !== "NA" ? "pointer" : "crosshair";
+              this.drawSourceAxis();
+            } else if (name === "f0base" && this.VariableF0 === "on") {
+              const map = this.getAxisToPx(this.cvF0Base, this.padBase, [-1, 1], [0, 48]);
+              const y = map.p2y(py);
+              if (Math.abs(y - this.F0BaseKnobVal) < 2.2) {
+                this.F0KnobHit = true;
+                canvas.style.cursor = "ns-resize";
+              } else {
+                canvas.style.cursor = "default";
+              }
+              this.drawF0BaseAxis();
+            } else if (name === "f0paint" && this.VariableF0 === "on") {
+              const map = this.getAxisToPx(this.cvF0Paint, this.padPaint, [0, this.Duration], [this.F0BaseKnobVal - 6, this.F0BaseKnobVal + 6]);
+              const x = map.p2x(px);
+              const knobX = this.TimeInF0Reference * this.BiasTime;
+              if (Math.abs(x - knobX) < this.Duration / 35.0) {
+                this.F0TimeHit = true;
+                canvas.style.cursor = "ew-resize";
+              } else {
+                canvas.style.cursor = "crosshair";
+              }
+              this.drawF0PaintAxis();
+            }
+            return;
+          }
+          
+          if (["tp", "te", "ta", "tc"].includes(this.DragMode)) {
+            const map = this.getAxisToPx(this.cvSource, this.padSrc, [0, 1], this.SourceYLim);
+            const x = map.p2x(px);
+            const { tp, te, ta, tc } = this.LFparameters;
+            if (this.DragMode === "tp") {
+              this.LFparameters.tp = Math.min(te - 0.02, Math.max(te / 2.0 + 0.02, x));
+            } else if (this.DragMode === "te") {
+              const teToTc = tc - te;
+              let newTe = Math.max(tp + 0.02, Math.min(tp * 2.0 - 0.02, x));
+              let newTc = Math.min(1.0, teToTc + newTe);
+              newTe = Math.min(newTc - ta - 0.02, newTe);
+              this.LFparameters.te = newTe;
+              this.LFparameters.tc = newTc;
+            } else if (this.DragMode === "ta") {
+              const taBottomY = this.TaBottomY;
+              const taTopY    = this.SourceYLim[1];
+              const topMarginCoeff = (taTopY - taBottomY) / Math.max(Math.abs(taBottomY), 1e-9);
+              const topMargin = topMarginCoeff * (tc - te) + te;
+              const taTopX = Math.min(topMargin - 0.02 * topMarginCoeff, Math.max(te + 0.0035, x));
+              this.LFparameters.ta = (Math.abs(taBottomY) / Math.max(taTopY - taBottomY, 1e-9)) * (taTopX - te);
+            } else if (this.DragMode === "tc") {
+              this.LFparameters.tc = Math.max(te + ta + 0.02, Math.min(1.0, x));
+            }
+            this.updateDisplay();
+          } else if (this.DragMode === "f0base") {
+            const map = this.getAxisToPx(this.cvF0Base, this.padBase, [-1, 1], [0, 48]);
+            const knobVal = Math.max(0.0, Math.min(48.0, map.p2y(py)));
+            this.F0BaseKnobVal = knobVal;
+            const f0Base = 55.0 * Math.pow(2.0, knobVal / 12.0);
+            document.getElementById("lblLFF0Base").textContent = `${f0Base.toFixed(1)} Hz`;
+            for (let i = 0; i < this.SketchF0.length; i++) {
+              this.SketchF0[i] = (this.SketchF0[i] / this.SketchF0Base) * f0Base;
+              this.SketchSemitone[i] = Math.log2(this.SketchF0[i] / 55.0) * 12.0;
+            }
+            this.SketchF0Base = f0Base;
+            this.updateDisplay();
+          } else if (this.DragMode === "f0time") {
+            const map = this.getAxisToPx(this.cvF0Paint, this.padPaint, [0, this.Duration], [this.F0BaseKnobVal - 6, this.F0BaseKnobVal + 6]);
+            const x = map.p2x(px);
+            let bias = x / this.TimeInF0Reference;
+            bias = Math.min((1.0 / 0.25) * this.Duration, Math.max((1.0 / 4.0) * this.Duration, bias));
+            this.BiasTime = bias;
+            this.drawF0PaintAxis();
+          } else if (this.DragMode === "f0draw") {
+            const map = this.getAxisToPx(this.cvF0Paint, this.padPaint, [0, this.Duration], [this.F0BaseKnobVal - 6, this.F0BaseKnobVal + 6]);
+            this.DraftPts.push([map.p2x(px), map.p2y(py)]);
+            this.drawF0PaintAxis();
+          }
+        }
+        
+        onPointerDown(name, px, py, canvas) {
+          this.onPointerMove(name, px, py, canvas);
+          document.getElementById("btnLFSave").disabled = true;
+          if (name === "src" && this.HoverParam !== "NA") {
+            this.DragMode = this.HoverParam;
+            this.drawSourceAxis();
+          } else if (name === "f0base" && this.F0KnobHit) {
+            this.DragMode = "f0base";
+            this.drawF0BaseAxis();
+          } else if (name === "f0paint" && this.VariableF0 === "on") {
+            if (this.F0TimeHit) {
+              this.DragMode = "f0time";
+            } else {
+              this.DragMode = "f0draw";
+              const map = this.getAxisToPx(this.cvF0Paint, this.padPaint, [0, this.Duration], [this.F0BaseKnobVal - 6, this.F0BaseKnobVal + 6]);
+              this.DraftPts = [[map.p2x(px), map.p2y(py)]];
+            }
+          }
+        }
+        
+        onPointerUp() {
+          if (this.DragMode === "none") return;
+          const prev = this.DragMode;
+          this.DragMode = "none";
+          
+          if (prev === "f0time") {
+            this.Duration = Math.max(0.25, Math.min(4.0, this.Duration / this.BiasTime));
+            this.TimeInF0Reference = this.Duration / 2.0;
+            this.BiasTime = 1.0;
+          } else if (prev === "f0draw" && this.DraftPts.length >= 2) {
+            const sorted = this.DraftPts.slice().sort((a, b) => a[0] - b[0]);
+            const uX = [], uY = [];
+            for (let i = 0; i < sorted.length; i++) {
+              if (i === 0 || sorted[i][0] - uX[uX.length - 1] > 1e-4) {
+                uX.push(sorted[i][0]);
+                uY.push(sorted[i][1]);
+              }
+            }
+            if (uX.length >= 2) {
+              const minX = uX[0], maxX = uX[uX.length - 1];
+              for (let i = 0; i < this.SketchTimeBase.length; i++) {
+                const t = this.SketchTimeBase[i];
+                if (t >= minX && t <= maxX) {
+                  this.SketchSemitone[i] = DSPUtils.interp1Scalar(uX, uY, t);
+                  this.SketchF0[i] = 55.0 * Math.pow(2.0, this.SketchSemitone[i] / 12.0);
+                }
+              }
+            }
+            this.DraftPts = [];
+          }
+          
+          this.renderAll();
+          if (this.ParentApp) this.ParentApp.onLFDesignerRelease();
+        }
+        
+        updateDisplay() {
+          const { tp, te, ta, tc } = this.LFparameters;
+          const Tw = 2.0 / (this.FsPlot / 2.0);
+          const modelOut = LFSourceModel.sourceByLFmodelAAF6T(this.TimeForDisplay, tp, te, ta, tc, Tw);
+          
+          this.CurrentSourceWave = modelOut.source;
+          this.CurrentVVWave     = modelOut.volumeVerocity;
+          
+          let minS = 0, maxS = 0;
+          for (let i = 0; i < modelOut.source.length; i++) {
+            if (modelOut.source[i] < minS) minS = modelOut.source[i];
+            if (modelOut.source[i] > maxS) maxS = modelOut.source[i];
+          }
+          if (maxS - minS > 1e-6) this.SourceYLim = [minS, maxS];
+          
+          this.TaBottomY = DSPUtils.interp1Scalar(this.TimeForDisplay, modelOut.source, te);
+          this.TaTopX    = te + ((this.SourceYLim[1] - this.TaBottomY) / Math.max(Math.abs(this.TaBottomY), 1e-9)) * ta;
+          
+          const specObj = this.computeWeightedSpectrum([tp, te, ta, tc]);
+          this.LFmodelGenericSpectrum = specObj.rawSpec;
+          this.CurrentWeightedSpec    = specObj.weighted;
+          
+          document.getElementById("lblTp").textContent = `tp:${(tp * 100).toFixed(3).padStart(7, " ")}`;
+          document.getElementById("lblTe").textContent = `te:${(te * 100).toFixed(3).padStart(7, " ")}`;
+          document.getElementById("lblTa").textContent = `ta:${(ta * 100).toFixed(3).padStart(7, " ")}`;
+          document.getElementById("lblTc").textContent = `tc:${(tc * 100).toFixed(3).padStart(7, " ")}`;
+          
+          if (this.ParentApp) {
+            this.ParentApp.onLFDesignerUpdated(this.LFparameters, this.SketchF0Base, this.LFmodelGenericFaxis, this.LFmodelGenericSpectrum);
+          }
+          this.renderAll();
+        }
+        
+        renderAll() {
+          this.drawVVAxis();
+          this.drawSourceAxis();
+          this.drawSpectrumAxis();
+          if (this.VariableF0 === "on") {
+            this.drawF0BaseAxis();
+            this.drawF0PaintAxis();
+          }
+        }
+        
+        drawVVAxis() {
+          const cv = this.cvVV;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          let maxVV = 1e-6;
+          for (let i = 0; i < this.CurrentVVWave.length; i++) {
+            if (this.CurrentVVWave[i] > maxVV) maxVV = this.CurrentVVWave[i];
+          }
+          const map = this.getAxisToPx(cv, this.padVV, [0, 1], [0, maxVV * 1.08]);
+          
+          ctx.strokeStyle = "#3399e6";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(map.x2p(0), map.y2p(0));
+          ctx.lineTo(map.x2p(1), map.y2p(0));
+          ctx.stroke();
+          
+          ctx.strokeStyle = "#111";
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          let started = false;
+          for (let i = 0; i < this.TimeForDisplay.length; i++) {
+            const t = this.TimeForDisplay[i];
+            if (t < 0 || t > 1) continue;
+            const px = map.x2p(t), py = map.y2p(this.CurrentVVWave[i]);
+            if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        
+        drawSourceAxis() {
+          const cv = this.cvSource;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const map = this.getAxisToPx(cv, this.padSrc, [0, 1], this.SourceYLim);
+          const { tp, te, tc } = this.LFparameters;
+          
+          ctx.strokeStyle = "#3399e6";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(map.x2p(0), map.y2p(0));
+          ctx.lineTo(map.x2p(1), map.y2p(0));
+          ctx.stroke();
+          
+          const drawParamLine = (x1, y1, x2, y2, name, col) => {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = (this.DragMode === name) ? 4 : (this.HoverParam === name ? 2.6 : 1.3);
+            ctx.beginPath();
+            ctx.moveTo(map.x2p(x1), map.y2p(y1));
+            ctx.lineTo(map.x2p(x2), map.y2p(y2));
+            ctx.stroke();
+          };
+          
+          drawParamLine(tp, 0, tp, this.SourceYLim[1], "tp", "#0000ee");
+          drawParamLine(te, this.SourceYLim[0], te, 0, "te", "#0000ee");
+          drawParamLine(tc, this.SourceYLim[0], tc, this.SourceYLim[1], "tc", "#0000ee");
+          drawParamLine(te, this.TaBottomY, this.TaTopX, this.SourceYLim[1], "ta", "#ee0000");
+          
+          ctx.fillStyle = "#ee0000";
+          ctx.beginPath();
+          ctx.arc(map.x2p(this.TaTopX), map.y2p(this.SourceYLim[1]), 6, 0, 2 * Math.PI);
+          ctx.fill();
+          
+          ctx.strokeStyle = "#111";
+          ctx.lineWidth = 2.2;
+          ctx.beginPath();
+          let started = false;
+          for (let i = 0; i < this.TimeForDisplay.length; i++) {
+            const t = this.TimeForDisplay[i];
+            if (t < 0 || t > 1) continue;
+            const px = map.x2p(t), py = map.y2p(this.CurrentSourceWave[i]);
+            if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+        }
+        
+        drawSpectrumAxis() {
+          const cv = this.cvSpectrum;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          let maxPeak = 20.0;
+          for (let i = 0; i < this.LFmodelGenericFaxis.length; i++) {
+            if (this.LFmodelGenericFaxis[i] < 40 && this.CurrentWeightedSpec[i] > maxPeak) {
+              maxPeak = this.CurrentWeightedSpec[i];
+            }
+          }
+          const ylim = [-20, maxPeak];
+          const logMin = 0.0, logMax = Math.log10(40.0);
+          const w = cv.width - this.padSpec.l - this.padSpec.r;
+          const h = cv.height - this.padSpec.t - this.padSpec.b;
+          const x2p = (f) => this.padSpec.l + ((Math.log10(Math.max(f, 1.0)) - logMin) / (logMax - logMin)) * w;
+          const y2p = (y) => this.padSpec.t + (1.0 - (y - ylim[0]) / (ylim[1] - ylim[0])) * h;
+          
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(this.padSpec.l, this.padSpec.t, w, h);
+          ctx.clip();
+          
+          ctx.strokeStyle = "rgba(0,0,0,0.14)";
+          ctx.lineWidth = 1;
+          const xGridVals = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40];
+          for (let gv of xGridVals) {
+            const px = x2p(gv);
+            ctx.beginPath(); ctx.moveTo(px, this.padSpec.t); ctx.lineTo(px, this.padSpec.t + h); ctx.stroke();
+          }
+          for (let gy = -20; gy <= maxPeak; gy += 5) {
+            const py = y2p(gy);
+            ctx.beginPath(); ctx.moveTo(this.padSpec.l, py); ctx.lineTo(this.padSpec.l + w, py); ctx.stroke();
+          }
+          
+          const plotCurve = (specArr, col, lw) => {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            let started = false;
+            for (let i = 1; i < this.LFmodelGenericFaxis.length; i++) {
+              const f = this.LFmodelGenericFaxis[i];
+              if (f < 1.0) continue;
+              if (f > 40.0) break;
+              const px = x2p(f), py = y2p(specArr[i]);
+              if (!started) { ctx.moveTo(px, py); started = true; } else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          };
+          
+          plotCurve(this.RefSpectra.modal.weighted,   "#0000ee", 1.1);
+          plotCurve(this.RefSpectra.breathy.weighted, "#ee0000", 1.1);
+          plotCurve(this.RefSpectra.fry.weighted,     "#00aa00", 1.1);
+          plotCurve(this.CurrentWeightedSpec,         "#111111", 2.2);
+          
+          const lx = this.padSpec.l + 12, ly = this.padSpec.t + h - 78;
+          ctx.fillStyle = "rgba(255,255,255,0.92)";
+          ctx.strokeStyle = "#888";
+          ctx.lineWidth = 1;
+          ctx.fillRect(lx, ly, 105, 68);
+          ctx.strokeRect(lx, ly, 105, 68);
+          const items = [["test", "#111", 2.2], ["modal", "#00e", 1.2], ["breathy", "#e00", 1.2], ["vocal fry", "#0a0", 1.2]];
+          ctx.font = "11.5px sans-serif";
+          ctx.textAlign = "left";
+          items.forEach((it, idx) => {
+              const iy = ly + 13 + idx * 15;
+              ctx.strokeStyle = it[1]; ctx.lineWidth = it[2];
+              ctx.beginPath(); ctx.moveTo(lx + 8, iy); ctx.lineTo(lx + 28, iy); ctx.stroke();
+              ctx.fillStyle = "#111";
+              ctx.fillText(it[0], lx + 34, iy + 4);
+          });
+          
+          ctx.restore();
+          ctx.strokeStyle = "#222";
+          ctx.strokeRect(this.padSpec.l, this.padSpec.t, w, h);
+          
+          ctx.fillStyle = "#111";
+          ctx.font = "14px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("source spectrum with +6dB/oct emphasis", this.padSpec.l + w / 2, 20);
+          ctx.font = "13px sans-serif";
+          ctx.fillText("frequency (re. 1/T0)", this.padSpec.l + w / 2, cv.height - 6);
+          
+          ctx.font = "11.5px sans-serif";
+          for (let t of [1, 2, 5, 10, 20, 40]) {
+            ctx.fillText(String(t), x2p(t), this.padSpec.t + h + 15);
+          }
+          ctx.textAlign = "right";
+          for (let gy = -20; gy <= maxPeak; gy += 10) {
+            ctx.fillText(String(gy), this.padSpec.l - 5, y2p(gy) + 4);
+          }
+          ctx.save();
+          ctx.translate(14, this.padSpec.t + h / 2);
+          ctx.rotate(-Math.PI / 2);
+          ctx.textAlign = "center";
+          ctx.font = "13px sans-serif";
+          ctx.fillText("level (dB re. at F0)", 0, 0);
+          ctx.restore();
+        }
+        
+        drawF0BaseAxis() {
+          const cv = this.cvF0Base;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const map = this.getAxisToPx(cv, this.padBase, [-1, 1], [0, 48]);
+          const cx = map.x2p(0);
+          const col = this.DragMode === "f0base" ? "#00cc00" : "#0000ee";
+          
+          ctx.strokeStyle = col;
+          ctx.lineWidth = this.F0KnobHit ? 3 : 1.5;
+          ctx.beginPath();
+          ctx.moveTo(cx, map.y2p(0));
+          ctx.lineTo(cx, map.y2p(48));
+          ctx.stroke();
+          
+          const ky = map.y2p(this.F0BaseKnobVal);
+          ctx.lineWidth = this.F0KnobHit ? 3 : 2;
+          ctx.beginPath();
+          ctx.moveTo(cx - 8, ky); ctx.lineTo(cx + 8, ky);
+          ctx.moveTo(cx, ky - 8); ctx.lineTo(cx, ky + 8);
+          ctx.stroke();
+        }
+        
+        drawF0PaintAxis() {
+          const cv = this.cvF0Paint;
+          const ctx = cv.getContext("2d");
+          ctx.clearRect(0, 0, cv.width, cv.height);
+          
+          const xlim = [0, this.Duration];
+          const ylim = [this.F0BaseKnobVal - 6, this.F0BaseKnobVal + 6];
+          const map = this.getAxisToPx(cv, this.padPaint, xlim, ylim);
+          
+          const noteNames = ["A","A#","B","C","C#","D","D#","E","F","F#","G","G#"];
+          const semitoneToNote = (st) => {
+            const idx = ((Math.round(st) % 12) + 12) % 12;
+            const oct = Math.floor((Math.round(st) + 9) / 12) + 1;
+            const n = noteNames[idx];
+            return n.includes("#") ? "" : `${n}${oct}`;
+          };
+          
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(this.padPaint.l, this.padPaint.t, map.w, map.h);
+          ctx.clip();
+          
+          ctx.strokeStyle = "rgba(0,0,0,0.14)";
+          ctx.lineWidth = 1;
+          const stStart = Math.ceil(ylim[0]), stEnd = Math.floor(ylim[1]);
+          for (let st = stStart; st <= stEnd; st++) {
+            const py = map.y2p(st);
+            ctx.beginPath(); ctx.moveTo(this.padPaint.l, py); ctx.lineTo(this.padPaint.l + map.w, py); ctx.stroke();
+          }
+          
+          ctx.strokeStyle = "#00aa00";
+          ctx.lineWidth = 1.2;
+          const refY = map.y2p(this.F0BaseKnobVal);
+          ctx.beginPath(); ctx.moveTo(this.padPaint.l, refY); ctx.lineTo(this.padPaint.l + map.w, refY); ctx.stroke();
+          
+          const knobX = map.x2p(this.TimeInF0Reference * this.BiasTime);
+          ctx.lineWidth = (this.F0TimeHit || this.DragMode === "f0time") ? 3.2 : 1.4;
+          ctx.beginPath(); ctx.moveTo(knobX, this.padPaint.t); ctx.lineTo(knobX, this.padPaint.t + map.h); ctx.stroke();
+          
+          ctx.strokeStyle = "#0000ee";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          for (let i = 0; i < this.SketchTimeBase.length; i++) {
+            const t = this.SketchTimeBase[i] * this.BiasTime;
+            if (t > this.Duration + 0.05) break;
+            const px = map.x2p(t), py = map.y2p(this.SketchSemitone[i]);
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+          
+          if (this.DraftPts.length > 1) {
+            ctx.strokeStyle = "#ee0000";
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            for (let i = 0; i < this.DraftPts.length; i++) {
+              const px = map.x2p(this.DraftPts[i][0]);
+              const py = map.y2p(this.DraftPts[i][1]);
+              if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+          }
+          ctx.restore();
+          
+          ctx.strokeStyle = "#222";
+          ctx.strokeRect(this.padPaint.l, this.padPaint.t, map.w, map.h);
+          
+          ctx.fillStyle = "#111";
+          ctx.font = "11px sans-serif";
+          ctx.textAlign = "right";
+          for (let st = stStart; st <= stEnd; st++) {
+            const lbl = semitoneToNote(st);
+            if (lbl) ctx.fillText(lbl, this.padPaint.l - 5, map.y2p(st) + 4);
+          }
+          
+          ctx.textAlign = "center";
+          const stepT = this.Duration <= 0.6 ? 0.1 : (this.Duration <= 1.5 ? 0.25 : 0.5);
+          for (let t = 0; t <= this.Duration + 1e-6; t += stepT) {
+            const px = map.x2p(t);
+            ctx.fillText(Number(t.toFixed(2)).toString(), px, this.padPaint.t + map.h + 15);
+          }
+          ctx.font = "13px sans-serif";
+          ctx.fillText("time (s)", this.padPaint.l + map.w / 2, cv.height - 5);
+        }
+        
+        generateF0BaseStructure(fsTarget = this.SamplingFrequency) {
+          if (this.VariableF0 === "off") {
+            const f0Base = this.ParentApp ? this.ParentApp.F0 : this.F0;
+            const vibRate = this.ParentApp ? this.ParentApp.VibratoFrequency : this.VibratoRate;
+            const vibDepth = this.ParentApp ? this.ParentApp.VibratoDepth : this.VibratoDepth;
+            const n = Math.floor(this.Duration * fsTarget) + 1;
+            const tt = new Float64Array(n);
+            const f0 = new Float64Array(n);
+            for (let i = 0; i < n; i++) {
+              const t = i / fsTarget;
+              tt[i] = t;
+              f0[i] = Math.pow(2.0, Math.log2(f0Base) + (vibDepth / 1200.0) * Math.sin(2.0 * Math.PI * vibRate * t));
+            }
+            return { f0Trajectory: f0, temporalPositions: tt, samplingFrequency: fsTarget };
+          } else {
+            const tVis = [], f0Vis = [];
+            for (let i = 0; i < this.SketchTimeBase.length; i++) {
+              if (this.SketchTimeBase[i] <= this.Duration + 1e-6) {
+                tVis.push(this.SketchTimeBase[i]);
+                f0Vis.push(this.SketchF0[i]);
+              }
+            }
+            const maxT = tVis[tVis.length - 1];
+            const n = Math.floor(maxT * fsTarget) + 1;
+            const tt = new Float64Array(n);
+            for (let i = 0; i < n; i++) tt[i] = i / fsTarget;
+            const f0 = DSPUtils.interp1(tVis, f0Vis, tt);
+            return { f0Trajectory: f0, temporalPositions: tt, samplingFrequency: fsTarget };
+          }
+        }
+        
+        synthesizeFromCurrentTrajectory(fsTarget = this.SamplingFrequency) {
+          const f0BaseStr = this.generateF0BaseStructure(fsTarget);
+          const outStr = LFSourceModel.synthesizeFromF0Trajectory(
+            f0BaseStr.f0Trajectory, f0BaseStr.temporalPositions, fsTarget,
+            this.LFparameters.tp, this.LFparameters.te, this.LFparameters.ta, this.LFparameters.tc
+          );
+          outStr.f0Base = this.SketchF0Base;
+          return outStr;
+        }
+        
+        onPlayButtonPushed() {
+          const fs = this.SamplingFrequency;
+          const f0BaseStr = this.generateF0BaseStructure(fs);
+          const outStr = LFSourceModel.synthesizeFromF0Trajectory(
+            f0BaseStr.f0Trajectory, f0BaseStr.temporalPositions, fs,
+            this.LFparameters.tp, this.LFparameters.te, this.LFparameters.ta, this.LFparameters.tc
+          );
+          const x = outStr.antiAliasedSignal;
+          this.LastSynthesized = { outStr, f0BaseStr };
+          document.getElementById("btnLFSave").disabled = false;
+          
+          const xMin = DSPUtils.fftfilt(this.EqualizerStr.minimumPhaseResponseW, x);
+          let maxAbs = 0.0;
+          for (let i = 0; i < xMin.length; i++) {
+            if (Math.abs(xMin[i]) > maxAbs) maxAbs = Math.abs(xMin[i]);
+          }
+          if (maxAbs > 0) {
+            const g = 0.9 / maxAbs;
+            for (let i = 0; i < xMin.length; i++) xMin[i] *= g;
+          }
+          DSPUtils.playSignal(xMin, fs);
+        }
+        
+        async onSaveButtonPushed() {
+          if (!this.LastSynthesized) return;
+          const baseName = "LFmodel" + DSPUtils.timestampStr();
+          const x = this.LastSynthesized.outStr.antiAliasedSignal;
+          let maxAbs = 0.0;
+          for (let i = 0; i < x.length; i++) if (Math.abs(x[i]) > maxAbs) maxAbs = Math.abs(x[i]);
+          const norm = new Float64Array(x.length);
+          const g = maxAbs > 0 ? 0.9 / maxAbs : 1.0;
+          for (let i = 0; i < x.length; i++) norm[i] = x[i] * g;
+          
+          const { tp, te, ta, tc } = this.LFparameters;
+          const txtContent = `tp ${(tp * 100).toFixed(4)}\nte ${(te * 100).toFixed(4)}\nta ${(ta * 100).toFixed(4)}\ntc ${(tc * 100).toFixed(4)}\n`;
+          const jsonObj = {
+            creator: "LFModelDesignerApp",
+            timestamp: new Date().toISOString(),
+            LFparameters: this.LFparameters,
+            f0Base: this.SketchF0Base,
+            duration: this.Duration
+          };
+          
+          const items = [
+          {
+            ext: ".wav",
+            mime: "audio/wav",
+            description: "24-bit PCM Glottal Source Audio (.wav)",
+            blob: DSPUtils.encodeWAV24Bit(norm, this.SamplingFrequency)
+          },
+          {
+            ext: ".txt",
+            mime: "text/plain",
+            description: "L-F Timing Parameters (.txt)",
+            blob: new Blob([txtContent], { type: "text/plain;charset=utf-8" })
+          },
+          {
+            ext: ".json",
+            mime: "application/json",
+            description: "L-F Synthesis State (.json)",
+            blob: new Blob([JSON.stringify(jsonObj, null, 2)], { type: "application/json" })
+          }
+          ];
+          
+          await DSPUtils.saveBundleToDirectory(baseName, items);
+        }
+        
+        onLoadFile(e) {
+          const file = e.target.files[0];
+          if (!file) return;
+          const ext = file.name.split(".").pop().toLowerCase();
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            try {
+              const text = evt.target.result;
+              if (ext === "json") {
+                const obj = JSON.parse(text);
+                const p = obj.LFparameters || (obj.synthStructure && obj.synthStructure.LFparameters);
+                if (p) {
+                  this.LFparameters = { tp: Number(p.tp), te: Number(p.te), ta: Number(p.ta), tc: Number(p.tc) };
+                }
+              } else {
+                const lines = text.split(/\r?\n/);
+                for (let line of lines) {
+                  const m = line.trim().match(/^(tp|te|ta|tc)\s+([0-9.]+)/i);
+                  if (m) {
+                    const key = m[1].toLowerCase();
+                    let val = parseFloat(m[2]);
+                    if (val > 1.0) val /= 100.0;
+                    this.LFparameters[key] = val;
+                  }
+                }
+              }
+              document.getElementById("btnLFSave").disabled = true;
+              this.updateDisplay();
+            } catch (err) {
+              alert("Failed to load L-F parameter file: " + err.message);
+            }
+            e.target.value = "";
+          };
+          reader.readAsText(file);
+        }
+      }
+      
+      /* ============================================================================
+ * 5. TAB SWITCHER & APPLICATION BOOTSTRAP
+ * ============================================================================ */
+      function switchTab(tabName) {
+        const isVT = (tabName === "vt");
+        document.getElementById("paneVT").classList.toggle("active", isVT);
+        document.getElementById("paneLF").classList.toggle("active", !isVT);
+        document.getElementById("tabBtnVT").classList.toggle("active", isVT);
+        document.getElementById("tabBtnLF").classList.toggle("active", !isVT);
+        if (isVT && window.vtApp) {
+          window.vtApp.renderAllCanvases();
+        } else if (!isVT && window.lfApp) {
+          window.lfApp.renderAll();
+        }
+      }
+      
+      window.addEventListener("DOMContentLoaded", () => {
+          window.vtApp = new VTShapeToSoundApp();
+          window.lfApp = new LFModelDesignerApp(window.vtApp);
+      });
+    </script>
+  </body>
+</html>
