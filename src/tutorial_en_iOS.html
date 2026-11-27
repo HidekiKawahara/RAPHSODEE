@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tutorial: Acoustic Checker by Giant-FFT (Web Edition)</title>
+  <style>
+    :root {
+      --bg: #eef1f5;
+      --panel-bg: #ffffff;
+      --border: #cfd6df;
+      --text: #1f2937;
+      --muted: #4b5563;
+      --code-bg: #f4f6f8;
+      --blue: rgb(0, 114, 189);
+      --orange: rgb(217, 83, 25);
+      --yellow: rgb(237, 177, 32);
+      --green: rgb(0, 160, 0);
+      --accent-soft: #e6f2fa;
+      --warn-soft: #fff8eb;
+      --warn-border: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.65;
+      font-size: 15px;
+    }
+    header {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 28px 24px;
+      border-bottom: 4px solid var(--blue);
+    }
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    header h1 {
+      margin: 0 0 8px 0;
+      font-size: 26px;
+      letter-spacing: -0.01em;
+    }
+    header p {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 14.5px;
+    }
+    .top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-link {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 5px;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      background: #334155;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      transition: background 0.15s;
+    }
+    .btn-link:hover { background: #475569; }
+    .btn-link.primary {
+      background: var(--blue);
+      border-color: #0284c7;
+    }
+    nav.toc {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 22px 0;
+    }
+    nav.toc h2 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    nav.toc ol {
+      margin: 0;
+      padding-left: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 6px 24px;
+      font-size: 14px;
+    }
+    nav.toc a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    nav.toc a:hover { text-decoration: underline; }
+    section.card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px 28px;
+      margin-bottom: 22px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 20px;
+      color: #0f172a;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 8px;
+    }
+    h3 {
+      font-size: 16.5px;
+      color: #1e293b;
+      margin-top: 22px;
+      margin-bottom: 8px;
+    }
+    code {
+      background: var(--code-bg);
+      border: 1px solid #dde2e8;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13.5px;
+    }
+    .callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--blue);
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    .callout.warn {
+      background: var(--warn-soft);
+      border-left-color: var(--warn-border);
+    }
+    .ui-mockup {
+      display: grid;
+      grid-template-columns: 220px 170px 1fr;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 16px 0;
+      font-size: 12.5px;
+    }
+    @media (max-width: 760px) {
+      .ui-mockup { grid-template-columns: 1fr; }
+    }
+    .mock-panel {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .mock-title {
+      font-weight: 700;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      color: #374151;
+    }
+    .mock-plot {
+      border: 1px dashed #9ca3af;
+      background: #f9fafb;
+      border-radius: 4px;
+      padding: 10px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .mock-bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 700;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+    .swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .step-list {
+      counter-reset: step;
+      list-style: none;
+      padding-left: 0;
+    }
+    .step-list > li {
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 16px;
+    }
+    .step-list > li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 2px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .math-block {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 14px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 9px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="top-bar">
+      <span style="font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:#38bdf8;">
+        Technical Tutorial for Engineering Students &amp; Speech Researchers
+      </span>
+      <div class="nav-links">
+        <a class="btn-link primary" href="acoustic_checker_gfft.html">Launch Application</a>
+        <a class="btn-link" href="tutorial_ja.html">日本語版チュートリアル (Japanese)</a>
+      </div>
+    </div>
+    <h1>Acoustic Checker by Giant-FFT (Web Edition)</h1>
+    <p>Real-time simultaneous measurement of Linear Time-Invariant (LTI) response, Random Time-Varying (RTV) / distortion floor, reverberation decay, and calibrated octave-band SPL in a standalone browser application.</p>
+  </div>
+</header>
+
+<main class="container">
+
+  <nav class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">1. Overview &amp; Motivation in Speech Research</a></li>
+      <li><a href="#layout">2. GUI Architecture &amp; Controls</a></li>
+      <li><a href="#workflow">3. Step-by-Step Measurement Workflow</a></li>
+      <li><a href="#calibration">4. Absolute SPL Calibration &amp; Voice Memos</a></li>
+      <li><a href="#plots">5. Interpreting the Three Real-Time Plots</a></li>
+      <li><a href="#theory">6. Signal Processing Theory (Giant-FFT &amp; Constant-Q BPF)</a></li>
+      <li><a href="#files">7. Archival Output Files &amp; Reproducibility</a></li>
+      <li><a href="#tips">8. Experimental Best Practices &amp; Troubleshooting</a></li>
+    </ol>
+  </nav>
+
+  <!-- SECTION 1 -->
+  <section class="card" id="overview">
+    <h2>1. Overview &amp; Motivation in Speech Research</h2>
+    <p>
+      Before recording a speech corpus, evaluating microphone arrays, or conducting listening tests, researchers must verify the electro-acoustic signal chain and room acoustics. Subtle issues—such as loudspeaker harmonic distortion, air-conditioning rumble, early desk reflections, excessive reverberation, or unintended OS-level audio filtering—can silently degrade fundamental frequency (<math><msub><mi>f</mi><mn>0</mn></msub></math>) estimation, spectral envelope analysis, and speech intelligibility metrics.
+    </p>
+    <p>
+      <strong>Acoustic Checker by Giant-FFT (Web Edition)</strong> (developed by Hideki Kawahara, MIT License) runs entirely inside a standard web browser with zero external dependencies—even directly from a local <code>file://</code> path. By outputting a periodic (cyclic) excitation signal and applying a full-period arbitrary-length Fast Fourier Transform ("Giant-FFT"), the tool decomposes the acoustic path every 100 ms into:
+    </p>
+    <ul>
+      <li><strong>LTI (Linear Time-Invariant) Impulse &amp; Frequency Response:</strong> The clean linear transfer function of the loudspeaker–room–microphone system.</li>
+      <li><strong>RTV (Random Time-Varying) &amp; Non-Linear Floor:</strong> Ambient background noise, time-varying fluctuations (e.g., ventilation fans, clock drift), and non-linear distortion isolated without stopping the excitation.</li>
+      <li><strong>Indirect / Reverberant Energy (+15 ms):</strong> Late reflections separated from the direct sound to quantify the Direct-to-Reverberant Ratio (DRR) across frequency bands.</li>
+      <li><strong>Frequency-Selective Power Decay:</strong> Octave-band temporal decay curves for inspecting reverberation characteristics (<math><msub><mi>T</mi><mn>60</mn></msub></math> / early decay) interactively across frequency.</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 2 -->
+  <section class="card" id="layout">
+    <h2>2. GUI Architecture &amp; Controls</h2>
+    <p>The interface is organized into three functional columns designed to guide configuration from left/center to real-time inspection on the right:</p>
+
+    <div class="ui-mockup">
+      <div class="mock-panel">
+        <div class="mock-title">Left: System &amp; Stream Control</div>
+        <ul style="margin:0; padding-left:16px;">
+          <li><strong>System Status</strong> prompt box</li>
+          <li><strong>Input / Output device</strong> selectors</li>
+          <li><strong>Sampling frequency</strong> (8–96 kHz)</li>
+          <li><strong>Input Channels</strong> (1 or 2)</li>
+          <li><strong>Load cyclic data</strong> (.wav/.aif/.aiff)</li>
+          <li><strong>Output channel</strong> (L, R, L and R)</li>
+          <li><strong>Spectrum display</strong> smoothing</li>
+          <li><strong>START</strong> / <strong>STOP</strong> stream</li>
+          <li><strong>snapshot GUI</strong> (PNG export)</li>
+        </ul>
+      </div>
+      <div class="mock-panel">
+        <div class="mock-title">Center: Workspace &amp; Calibration</div>
+        <ul style="margin:0; padding-left:16px;">
+          <li><strong>Set working folder</strong> (initial entry point)</li>
+          <li><strong>Recording</strong> status lamp</li>
+          <li><strong>Voice memo 5s</strong> (spoken metadata log)</li>
+          <li><strong>Calibration Ch-1</strong> group:
+            <ul>
+              <li><code>Calibrate</code> trigger</li>
+              <li><code>Measured SPL</code> (65–95 dB)</li>
+              <li><code>CAL. Value: dB</code> readout</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="mock-panel">
+        <div class="mock-title">Right: Real-Time Acoustic Analysis</div>
+        <div class="mock-plot">
+          <strong>Top Canvas: Transfer Function Spectrum</strong><br>
+          LTI Gain vs. RTV Floor (20 Hz – <math><msub><mi>f</mi><mi>s</mi></msub><mo>/</mo><mn>2</mn></math>)
+        </div>
+        <div style="text-align:center; font-size:11.5px; margin-bottom:8px; background:#eef2ff; padding:3px; border-radius:4px;">
+          <strong>BPF fc Slider:</strong> Interactive center frequency cursor &amp; decay band selector
+        </div>
+        <div class="mock-bottom-grid">
+          <div class="mock-plot" style="margin-bottom:0;">
+            <strong>Bottom-Left: Band SPL</strong><br>
+            Signal, RTV/Distortion, Indirect (+15 ms), &amp; Snapshot
+          </div>
+          <div class="mock-plot" style="margin-bottom:0;">
+            <strong>Bottom-Right: Power Response</strong><br>
+            1 kHz &amp; <math><msub><mi>f</mi><mi>c</mi></msub></math> Octave Decay (0 – 1.0 s)
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3 -->
+  <section class="card" id="workflow">
+    <h2>3. Step-by-Step Measurement Workflow</h2>
+    <p>
+      To prevent misconfiguration during laboratory sessions, the application enforces a strict sequential state machine: controls remain disabled until prerequisite steps are completed. Follow the <strong>System Status</strong> indicator in the top-left corner at each stage.
+    </p>
+
+    <ol class="step-list">
+      <li>
+        <strong>Initialize Workspace (<code>Set working folder</code> — Center Panel):</strong><br>
+        Click <code>Set working folder</code> first. In Chromium-based browsers (Google Chrome, Microsoft Edge), select a base directory and grant read/write permission; the app automatically creates a timestamped subdirectory named <code>acTestYYYYMMDDHHMMSS</code> where all recordings and snapshots are saved silently. (In Safari or Firefox, files automatically fall back to standard browser downloads.) The browser will then request microphone access to enumerate audio hardware.
+      </li>
+      <li>
+        <strong>Select Output &amp; Input Audio Devices (Left Panel):</strong><br>
+        Two dropdowns appear under <em>Input / Output device selection</em>: the upper dropdown selects the <strong>Input (microphone/interface)</strong>, and the lower dropdown selects the <strong>Output (loudspeaker/interface, Chrome/Edge)</strong>.
+        <div class="callout warn">
+          <strong>Important Order of Operations:</strong> Select your desired <strong>Output device (lower dropdown) first</strong>, and select your <strong>Input device (upper dropdown) second</strong>. Selecting an Input device immediately locks both hardware dropdowns and advances to sampling frequency selection.
+        </div>
+      </li>
+      <li>
+        <strong>Select Sampling Frequency (<code>Sampling frequency</code>):</strong><br>
+        Choose an initial sampling rate from <code>8000</code> up to <code>96000</code> Hz (typically <code>48000</code> Hz for speech and room acoustics). Note that when you load a cyclic audio file in Step 5, the engine automatically updates its operating sampling rate to match the file's native sample rate.
+      </li>
+      <li>
+        <strong>Select Input Channels (<code>Input Channels</code>):</strong><br>
+        Select <code>1</code> (or <code>2</code>) from the dropdown. Setting a non-zero channel count unlocks cyclic file loading, spectrum smoothing modes, and the 5-second voice memo recorder. Note that real-time acoustic analysis processes <strong>Channel 1</strong> (input index 0).
+      </li>
+      <li>
+        <strong>Load Cyclic Excitation Signal (<code>Load cyclic data</code>) &amp; Choose Output Routing:</strong><br>
+        Click <code>Load cyclic data</code> and choose an uncompressed <code>.wav</code>, <code>.aif</code>, or <code>.aiff</code> periodic test signal (e.g., orthogonal periodic sequence, periodic velvet noise, or TSP/swept-sine with period <math><mi>N</mi></math>, ideally <math><mi>N</mi><mo>≥</mo><mn>3</mn><msub><mi>f</mi><mi>s</mi></msub></math> so the 1-second impulse window fits within <math><mi>N</mi><mo>/</mo><mn>3</mn></math>). Select output routing under <strong>Output channel</strong> (<code>L</code>, <code>R</code>, or <code>L and R</code>).
+      </li>
+      <li>
+        <strong>Run Full-Duplex Measurement (<code>START</code> &rarr; Inspect &rarr; <code>STOP</code>):</strong><br>
+        Click <code>START</code>. The excitation signal loops seamlessly (up to a maximum safety duration of 300 seconds) while Web Audio captures microphone input with browser AGC, noise suppression, and echo cancellation disabled. Every 100 ms, once at least one full period <math><mi>N</mi></math> has been buffered, all three plots update in real time:
+        <ul>
+          <li>Toggle <strong>Spectrum display</strong> between <code>Raw DFT</code>, <code>1/3 octave smoothed</code>, and <code>1/12 octave smoothed</code>.</li>
+          <li>Drag the <strong>BPF fc</strong> slider to sweep the green cursor across frequencies and inspect band-specific reverberation decay.</li>
+          <li>Click <strong>Snapshot Level</strong> below the Band SPL plot to freeze the current signal spectrum in green for A/B comparison (e.g., comparing loudspeaker angles or acoustic treatment).</li>
+        </ul>
+        Click <code>STOP</code> to end streaming. Four 24-bit WAV files (initial cycle and full session, both source and captured) are automatically written to your workspace, and the <strong>Calibrate</strong> button unlocks.
+      </li>
+    </ol>
+  </section>
+
+  <!-- SECTION 4 -->
+  <section class="card" id="calibration">
+    <h2>4. Absolute SPL Calibration &amp; Voice Memos</h2>
+
+    <h3>4.1 Calibrating Channel 1 (<code>Calibration Ch-1</code>)</h3>
+    <p>
+      Prior to calibration, the Band SPL plot displays relative digital levels labeled <code>SPL CAL.NO (dB)</code> (<math><mo>-</mo><mn>110</mn></math> to <math><mn>0</mn><mtext>&nbsp;dB</mtext></math>). After completing at least one measurement cycle (<code>START</code> then <code>STOP</code>), you can calibrate the system to physical Sound Pressure Level (dB SPL re 20 &mu;Pa):
+    </p>
+    <ol>
+      <li>Position an external calibrated <strong>Sound Level Meter (SLM)</strong> immediately adjacent to the Ch-1 measurement microphone, facing the loudspeaker. Set the SLM to <strong>Z-weighting (Flat)</strong> or <strong>C-weighting</strong>, Slow time weighting (since the calibration signal is centered at 1 kHz, A-, C-, and Z-weightings agree closely, though Z/Flat is standard).</li>
+      <li>Click <strong>Calibrate</strong> in the Center Panel. The application synthesizes and loops a 1-octave band-limited multi-sine signal centered at 1 kHz (<math><mn>707</mn><mtext>&nbsp;Hz</mtext></math> to <math><mn>1414</mn><mtext>&nbsp;Hz</mtext></math> at 1 Hz spacing with randomized phases, normalized to an RMS amplitude of <math><mn>0.1</mn></math>, i.e., <math><mo>-</mo><mn>20</mn><mtext>&nbsp;dBFS</mtext></math>). The green Recording lamp illuminates.</li>
+      <li>Wait at least <strong>3.1 seconds</strong> for the room sound field and SLM reading to stabilize; the <code>Measured SPL</code> dropdown will automatically unlock.</li>
+      <li>Select the integer SPL value read from your Sound Level Meter (<code>95</code> down to <code>65</code> dB) in the <code>Measured SPL</code> dropdown.</li>
+      <li>Playback stops automatically. Using the final 3 seconds of recorded audio, the engine computes the sample standard deviation <math><msub><mi>&sigma;</mi><mi>y</mi></msub></math>, determines the digital RMS level <math><msub><mi>L</mi><mtext>obs</mtext></msub><mo>=</mo><mn>20</mn><msub><mi>log</mi><mn>10</mn></msub><mo>(</mo><msub><mi>&sigma;</mi><mi>y</mi></msub><mo>)</mo></math>, stores the calibration offset <math><msub><mi>C</mi><mtext>dB</mtext></msub><mo>=</mo><msub><mi>L</mi><mtext>SLM</mtext></msub><mo>-</mo><msub><mi>L</mi><mtext>obs</mtext></msub></math> in <code>CAL. Value: dB</code>, and rescales the Band SPL axis to <code>CAL. SPL (dB)</code> (<math><mn>0</mn></math> to <math><mn>100</mn><mtext>&nbsp;dB</mtext></math>).</li>
+    </ol>
+
+    <h3>4.2 Recording Spoken Experimental Logs (<code>Voice memo 5s</code>)</h3>
+    <p>
+      In acoustic field work, paper notes often get separated from audio files. Clicking <strong>Voice memo 5s</strong> (available whenever the main stream is stopped) records 5 seconds of speech from the microphone—ideal for stating microphone model, talker-to-mic distance, preamp gain, and room condition—normalizes peak amplitude to <math><mn>0.5</mn></math> (<math><mo>-</mo><mn>6</mn><mtext>&nbsp;dBFS</mtext></math>), and saves <code>voiceMemoYYYYMMDDHHMMSSr.wav</code> directly into the active session folder.
+    </p>
+  </section>
+
+  <!-- SECTION 5 -->
+  <section class="card" id="plots">
+    <h2>5. Interpreting the Three Real-Time Plots</h2>
+
+    <h3>5.1 Top Plot: Transfer Function &amp; RTV Floor</h3>
+    <p>Displays relative gain (<math><mo>-</mo><mn>80</mn></math> to <math><mo>+</mo><mn>20</mn><mtext>&nbsp;dB</mtext></math>) across a logarithmic frequency axis (<math><mn>20</mn><mtext>&nbsp;Hz</mtext></math> to <math><msub><mi>f</mi><mi>s</mi></msub><mo>/</mo><mn>2</mn></math>):</p>
+    <ul>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,114,189);"></span>Blue Curve (LTI)</span>
+        <strong>Linear Time-Invariant Gain:</strong> Power spectrum of the primary periodic impulse response segment. Use <code>Raw DFT</code> to spot narrow room modes or standing waves, and <code>1/3</code> or <code>1/12 octave smoothed</code> to inspect overall loudspeaker–microphone timbre balance.
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(217,83,25);"></span>Orange Curve (RTV)</span>
+        <strong>Random Time-Varying / Distortion Floor:</strong> Power spectrum evaluated at a half-period lag (<math><mi>N</mi><mo>/</mo><mn>2</mn></math>) of the periodic impulse response. For high-quality speech recordings, verify that the Blue LTI curve remains at least <strong>30–45 dB above</strong> the Orange RTV curve across the speech band (<math><mn>100</mn><mtext>&nbsp;Hz</mtext></math> – <math><mn>16</mn><mtext>&nbsp;kHz</mtext></math>). If the gap narrows at low frequencies, check HVAC noise; if it narrows at high playback levels, loudspeaker or preamp non-linearity (clipping/harmonic distortion) is occurring.
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,180,0);"></span>Green Vertical Line</span>
+        <strong>BPF <math><msub><mi>f</mi><mi>c</mi></msub></math> Marker:</strong> Indicates the active center frequency controlled by the slider below the plot.
+      </li>
+    </ul>
+
+    <h3>5.2 Bottom-Left Plot: Band SPL (1-Octave Band Decomposition)</h3>
+    <p>Evaluates integrated 1-octave band levels (<math><mo>[</mo><msub><mi>f</mi><mi>c</mi></msub><msup><mn>2</mn><mrow><mo>-</mo><mn>1</mn><mo>/</mo><mn>2</mn></mrow></msup><mo>,</mo><msub><mi>f</mi><mi>c</mi></msub><msup><mn>2</mn><mrow><mo>+</mo><mn>1</mn><mo>/</mo><mn>2</mn></mrow></msup><mo>]</mo></math>) at <math><mn>1</mn><mo>/</mo><mn>24</mn></math>-octave center spacing:</p>
+    <ul>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,114,189);"></span>Blue Curve (Signal)</span>
+        <strong>Total Octave-Band SPL:</strong> Observed band sound pressure level of the received signal.
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(237,177,32);"></span>Yellow Curve (Indirect / Reverberant)</span>
+        <strong>Late Reverberant Component (+15 ms):</strong> Band level of impulse response energy arriving more than <strong>15 ms after the direct-path peak</strong>. Comparing the Blue curve to the Yellow curve gives an immediate visual measure of the <strong>Direct-to-Reverberant Ratio (DRR)</strong>. In a dry vocal booth or close-mic setup, the Yellow curve should sit well below the Blue curve; if the Yellow curve approaches the Blue curve, room reflections dominate the microphone signal.
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(217,83,25);"></span>Orange Curve (Distortion / Noise)</span>
+        <strong>Effective RTV Band SPL:</strong> Equivalent band SPL of background noise and time-varying/non-linear components.
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,160,0);"></span>Green Curve (Snapshot)</span>
+        <strong>Reference Level Snapshot:</strong> Stored trace captured when pressing <code>Snapshot Level</code>.
+      </li>
+    </ul>
+
+    <h3>5.3 Bottom-Right Plot: Power Response (Temporal Decay)</h3>
+    <p>Displays peak-normalized temporal power decay (<math><mo>-</mo><mn>70</mn></math> to <math><mn>0</mn><mtext>&nbsp;dB</mtext></math>) over <math><mn>0</mn></math> to <math><mn>1.0</mn><mtext>&nbsp;s</mtext></math> (or <math><mtext>fftl</mtext><mo>/</mo><msub><mi>f</mi><mi>s</mi></msub></math>):</p>
+    <ul>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,114,189);"></span>Blue Curve (1 kHz Ref)</span>
+        <strong>1 kHz Octave-Band Power Decay:</strong> Fixed reference decay curve centered at 1000 Hz.
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,180,0);"></span>Green Curve (Slider <math><msub><mi>f</mi><mi>c</mi></msub></math>)</span>
+        <strong>Selected <math><msub><mi>f</mi><mi>c</mi></msub></math> Octave-Band Power Decay:</strong> Temporal envelope computed from 23 adjacent <math><mn>1</mn><mo>/</mo><mn>12</mn></math>-octave filters spanning <math><mo>&plusmn;</mo><mn>11</mn><mo>/</mo><mn>24</mn></math> octaves around <math><msub><mi>f</mi><mi>c</mi></msub></math>. Sweep the slider to detect discrete slap-back echoes (sharp secondary spikes) or frequency-dependent reverberation tails (e.g., longer low-frequency decay in untreated rooms) and note where the decay hits the flat horizontal noise floor.
+      </li>
+    </ul>
+  </section>
+
+  <!-- SECTION 6 -->
+  <section class="card" id="theory">
+    <h2>6. Signal Processing Theory (Under the Hood)</h2>
+
+    <h3>6.1 Arbitrary-Length "Giant-FFT" via Chirp-Z (Bluestein's Algorithm)</h3>
+    <p>
+      Conventional real-time analyzers apply short windowed power-of-two FFTs (e.g., 4096 points), introducing windowing leakage and failing to resolve long reverberation tails or exact integer-second periods (such as <math><mi>N</mi><mo>=</mo><mn>48000</mn></math> or <math><mn>144000</mn></math> samples). When <math><mi>N</mi></math> is a power of two, <code>fftGeneral()</code> executes an in-place Radix-2 Cooley–Tukey FFT. For any arbitrary period length <math><mi>N</mi></math>, it invokes <strong>Bluestein's Chirp-Z identity</strong>, rewriting the <math><mi>N</mi></math>-point DFT as a linear convolution evaluated via padded Radix-2 FFTs of size <math><mi>M</mi><mo>=</mo><msup><mn>2</mn><mrow><mo>&lceil;</mo><msub><mi>log</mi><mn>2</mn></msub><mo>(</mo><mn>2</mn><mi>N</mi><mo>-</mo><mn>1</mn><mo>)</mo><mo>&rceil;</mo></mrow></msup></math>:
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <mi>X</mi><mo>[</mo><mi>k</mi><mo>]</mo>
+        <mo>=</mo>
+        <munderover><mo>&sum;</mo><mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>N</mi><mo>-</mo><mn>1</mn></mrow></munderover>
+        <mi>x</mi><mo>[</mo><mi>n</mi><mo>]</mo>
+        <msup><mi>e</mi><mrow><mo>-</mo><mi>j</mi><mfrac><mrow><mn>2</mn><mi>&pi;</mi></mrow><mi>N</mi></mfrac><mi>n</mi><mi>k</mi></mrow></msup>
+        <mo>=</mo>
+        <msup><mi>b</mi><mo>*</mo></msup><mo>[</mo><mi>k</mi><mo>]</mo>
+        <munderover><mo>&sum;</mo><mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>N</mi><mo>-</mo><mn>1</mn></mrow></munderover>
+        <mrow><mo>(</mo><mi>x</mi><mo>[</mo><mi>n</mi><mo>]</mo><msup><mi>b</mi><mo>*</mo></msup><mo>[</mo><mi>n</mi><mo>]</mo><mo>)</mo></mrow>
+        <mi>b</mi><mo>[</mo><mi>k</mi><mo>-</mo><mi>n</mi><mo>]</mo>
+        <mo>,</mo>
+        <mspace width="1.2em"/>
+        <mi>b</mi><mo>[</mo><mi>k</mi><mo>]</mo>
+        <mo>=</mo>
+        <msup><mi>e</mi><mrow><mi>j</mi><mfrac><mi>&pi;</mi><mi>N</mi></mfrac><mrow><mo>(</mo><msup><mi>k</mi><mn>2</mn></msup><mo>mod</mo><mn>2</mn><mi>N</mi><mo>)</mo></mrow></mrow></msup>
+      </math>
+    </div>
+    <p>
+      Because the chirp factors <math><mi>b</mi><mo>[</mo><mi>k</mi><mo>]</mo></math> and their forward <math><mi>M</mi></math>-point FFT are memoized in <code>bluesteinCache</code>, exact leakage-free periodic deconvolution runs effortlessly every 100 ms in JavaScript.
+    </p>
+
+    <h3>6.2 Periodic Deconvolution &amp; Component Partitioning</h3>
+    <p>
+      Given one full cycle of the reference output <math><mi>x</mi><mo>[</mo><mi>n</mi><mo>]</mo></math> and captured microphone signal <math><mi>y</mi><mo>[</mo><mi>n</mi><mo>]</mo></math> (<math><mn>0</mn><mo>&le;</mo><mi>n</mi><mo>&lt;</mo><mi>N</mi></math>), the periodic impulse response <math><mi>h</mi><mo>[</mo><mi>n</mi><mo>]</mo></math> is recovered via regularized frequency-domain division:
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <mi>H</mi><mo>[</mo><mi>k</mi><mo>]</mo>
+        <mo>=</mo>
+        <mfrac>
+          <mrow><mi>Y</mi><mo>[</mo><mi>k</mi><mo>]</mo><msup><mi>X</mi><mo>*</mo></msup><mo>[</mo><mi>k</mi><mo>]</mo></mrow>
+          <mrow><mi>max</mi><mo>(</mo><msup><mrow><mo>|</mo><mi>X</mi><mo>[</mo><mi>k</mi><mo>]</mo><mo>|</mo></mrow><mn>2</mn></msup><mo>,</mo><msup><mn>10</mn><mrow><mo>-</mo><mn>30</mn></mrow></msup><mo>)</mo></mrow>
+        </mfrac>
+        <mo>,</mo>
+        <mspace width="1.5em"/>
+        <mi>h</mi><mo>[</mo><mi>n</mi><mo>]</mo>
+        <mo>=</mo>
+        <mo>&Re;</mo><mrow><mo>{</mo><msub><mtext>IFFT</mtext><mi>N</mi></msub><mo>(</mo><mi>H</mi><mo>[</mo><mi>k</mi><mo>]</mo><mo>)</mo><mo>}</mo></mrow>
+      </math>
+    </div>
+    <p>
+      Let <math><mi>L</mi><mo>=</mo><mi>min</mi><mo>(</mo><msub><mi>f</mi><mi>s</mi></msub><mo>,</mo><mo>&lfloor;</mo><mi>N</mi><mo>/</mo><mn>3</mn><mo>&rfloor;</mo><mo>)</mo></math> denote the analysis window length and <math><msub><mi>n</mi><mtext>peak</mtext></msub><mo>=</mo><mi>arg</mi><munder><mi>max</mi><mi>n</mi></munder><mo>|</mo><mi>h</mi><mo>[</mo><mi>n</mi><mo>]</mo><mo>|</mo></math> denote the direct-sound arrival index. Three length-<math><mi>L</mi></math> segments are extracted modulo <math><mi>N</mi></math> (<math><mn>0</mn><mo>&le;</mo><mi>i</mi><mo>&lt;</mo><mi>L</mi></math>):
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <msub><mi>h</mi><mtext>LTI</mtext></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>=</mo><mi>h</mi><mo>[</mo><mi>i</mi><mo>]</mo>
+        <mo>,</mo><mspace width="1.2em"/>
+        <msub><mi>h</mi><mtext>IND</mtext></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>=</mo><mi>h</mi><mrow><mo>[</mo><mo>(</mo><mi>i</mi><mo>+</mo><msub><mi>n</mi><mtext>peak</mtext></msub><mo>+</mo><mo>&lfloor;</mo><mn>0.015</mn><msub><mi>f</mi><mi>s</mi></msub><mo>+</mo><mn>0.5</mn><mo>&rfloor;</mo><mo>)</mo><mo>mod</mo><mi>N</mi><mo>]</mo></mrow>
+        <mo>,</mo><mspace width="1.2em"/>
+        <msub><mi>h</mi><mtext>RTV</mtext></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>=</mo><mi>h</mi><mrow><mo>[</mo><mo>(</mo><mi>i</mi><mo>+</mo><mo>&lfloor;</mo><mi>N</mi><mo>/</mo><mn>2</mn><mo>&rfloor;</mo><mo>)</mo><mo>mod</mo><mi>N</mi><mo>]</mo></mrow>
+      </math>
+    </div>
+    <p>
+      When <math><mi>N</mi><mo>/</mo><mn>2</mn></math> exceeds the room's reverberation time (or when specially structured cyclic signals cancel linear terms at half-period), <math><msub><mi>h</mi><mtext>RTV</mtext></msub></math> contains zero linear impulse energy and directly measures random time-varying perturbations, non-linearities, and background noise.
+    </p>
+
+    <h3>6.3 Constant-Q Log-Frequency Gaussian Filterbank</h3>
+    <p>
+      Ported from Hideki Kawahara's <code>constantQgaussBPFweight.m</code>, smoothed spectra and sub-band envelopes use Gaussian weights on a base-2 logarithmic frequency axis starting at <math><msub><mi>f</mi><mtext>low</mtext></msub><mo>=</mo><mn>1000</mn><mo>&times;</mo><msup><mn>2</mn><mrow><mo>-</mo><mn>6</mn></mrow></msup><mo>=</mo><mn>15.625</mn><mtext>&nbsp;Hz</mtext></math> in <math><mn>1</mn><mo>/</mo><mn>24</mn></math>-octave steps:
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <msub><mi>W</mi><mi>m</mi></msub><mo>(</mo><mi>f</mi><mo>)</mo>
+        <mo>&prop;</mo>
+        <mi>exp</mi><mrow><mo>(</mo><mo>-</mo><mfrac><msup><mrow><mo>(</mo><msub><mi>log</mi><mn>2</mn></msub><mi>f</mi><mo>-</mo><msub><mi>log</mi><mn>2</mn></msub><msub><mi>f</mi><mrow><mi>c</mi><mo>,</mo><mi>m</mi></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msubsup><mi>&sigma;</mi><mtext>oct</mtext><mn>2</mn></msubsup></mrow></mfrac><mo>)</mo></mrow>
+        <mo>,</mo>
+        <mspace width="1.2em"/>
+        <msub><mi>&sigma;</mi><mtext>oct</mtext></msub>
+        <mo>=</mo>
+        <mfrac><msub><mi>B</mi><mtext>oct</mtext></msub><mrow><mn>2</mn><mo>&sdot;</mo><mo>(</mo><mn>2</mn><msup><mi>&Phi;</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><mo>(</mo><mn>0.75</mn><mo>)</mo><mo>)</mo></mrow></mfrac>
+        <mo>&approx;</mo>
+        <mfrac><msub><mi>B</mi><mtext>oct</mtext></msub><mrow><mn>2</mn><mo>&times;</mo><mn>1.34898</mn></mrow></mfrac>
+      </math>
+    </div>
+    <p>
+      Being Gaussian in log-frequency avoids Gibbs ringing in both time and frequency domains, making it ideal for evaluating reverberation power decay curves via quadrature synthesis (<math><msqrt><msub><mi>W</mi><mi>m</mi></msub><mo>(</mo><mi>f</mi><mo>)</mo></msqrt></math>).
+    </p>
+  </section>
+
+  <!-- SECTION 7 -->
+  <section class="card" id="files">
+    <h2>7. Archival Output Files &amp; Reproducibility</h2>
+    <p>
+      All audio recordings are encoded in uncompressed <strong>24-bit linear PCM WAV</strong> format (preserving ~144 dB dynamic range for offline MATLAB/Python reanalysis) inside <code>acTestYYYYMMDDHHMMSS/</code> (where <code>&lt;TS&gt;</code> denotes a <code>YYYYMMDDHHMMSS</code> timestamp):
+    </p>
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Filename Pattern</th>
+          <th>Format / Channels</th>
+          <th>Triggered By</th>
+          <th>Description &amp; Research Use</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>initialSourceAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, Mono</td>
+          <td><code>STOP</code> (or auto-end)</td>
+          <td>First single cycle (<math><mi>N</mi></math> samples) of the reference excitation signal.</td>
+        </tr>
+        <tr>
+          <td><code>initialCapturedAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, Mono</td>
+          <td><code>STOP</code> (or auto-end)</td>
+          <td>First single cycle (<math><mi>N</mi></math> samples) of raw microphone input, including initial onset transient and hardware latency offset.</td>
+        </tr>
+        <tr>
+          <td><code>sourceAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, Stereo (L/R)</td>
+          <td><code>STOP</code> (or auto-end)</td>
+          <td>Complete multi-cycle stereo excitation waveform output over the entire streaming session.</td>
+        </tr>
+        <tr>
+          <td><code>capturedAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, Mono</td>
+          <td><code>STOP</code> (or auto-end)</td>
+          <td>Complete continuous Ch-1 recording over the entire session; allows synchronous averaging or time-varying drift analysis offline.</td>
+        </tr>
+        <tr>
+          <td><code>voiceMemo&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, Mono</td>
+          <td><code>Voice memo 5s</code></td>
+          <td>5.0-second spoken experimental note peak-normalized to <math><mn>0.5</mn></math> (<math><mo>-</mo><mn>6</mn><mtext>&nbsp;dBFS</mtext></math>).</td>
+        </tr>
+        <tr>
+          <td><code>GUIsnapAT&lt;TS&gt;.png</code></td>
+          <td>HiDPI PNG Image</td>
+          <td><code>snapshot GUI</code></td>
+          <td>Full vector-accurate render of all three panels, selected parameters, calibration value, and current plot curves for lab notebooks.</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- SECTION 8 -->
+  <section class="card" id="tips">
+    <h2>8. Experimental Best Practices &amp; Troubleshooting</h2>
+    <ul>
+      <li>
+        <strong>Disable OS-Level Voice Processing (Critical!):</strong> Although the Web Edition explicitly requests <code>echoCancellation: false</code>, <code>noiseSuppression: false</code>, and <code>autoGainControl: false</code> from the browser, modern operating systems apply hidden DSP underneath the browser:
+        <ul>
+          <li><strong>macOS:</strong> While streaming, open Control Center (orange microphone icon in the menu bar) and ensure <strong>Mic Mode</strong> is set to <strong>Standard</strong> (never <em>Voice Isolation</em>).</li>
+          <li><strong>Windows 11:</strong> Open <em>Settings &rarr; System &rarr; Sound &rarr; Properties</em> for both input and output devices and set <strong>Audio Enhancements</strong> to <strong>Off</strong>.</li>
+        </ul>
+      </li>
+      <li>
+        <strong>Recommended Browser:</strong> Use <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on desktop. Only Chromium browsers currently support the File System Access API (<code>showDirectoryPicker</code>) to write multiple 24-bit WAV files directly into a session folder without triggering four separate browser download prompts on every <code>STOP</code>, as well as <code>AudioContext.setSinkId()</code> for selecting non-default output interfaces.
+      </li>
+      <li>
+        <strong>Running Directly from Local Disk (<code>file://</code>):</strong> You do not need a web server. If strict browser policies block <code>AudioWorklet</code> module loading on <code>file://</code> URLs, the application automatically falls back to a synchronized full-duplex <code>ScriptProcessorNode</code> engine without losing functionality.
+      </li>
+      <li>
+        <strong>Preventing Acoustic Overload &amp; Hearing Fatigue:</strong> Start with conservative amplifier/interface output gain before clicking <code>START</code>, then raise playback level gradually while watching the gap between the Blue (LTI) and Orange (RTV) curves. If raising playback volume causes the Orange RTV curve to rise alongside the Blue curve instead of staying fixed at the ambient noise floor, your loudspeaker or microphone preamplifier is entering non-linear saturation.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  Tutorial for <strong>Acoustic Checker by Giant-FFT (Web Edition)</strong> &bull; Application Copyright &copy; 2026 Hideki Kawahara (MIT License)
+</footer>
+
+</body>
+</html>

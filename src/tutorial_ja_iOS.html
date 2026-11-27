@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>チュートリアル: Acoustic Checker by Giant-FFT (Web Edition)</title>
+  <style>
+    :root {
+      --bg: #eef1f5;
+      --panel-bg: #ffffff;
+      --border: #cfd6df;
+      --text: #1f2937;
+      --muted: #4b5563;
+      --code-bg: #f4f6f8;
+      --blue: rgb(0, 114, 189);
+      --orange: rgb(217, 83, 25);
+      --yellow: rgb(237, 177, 32);
+      --green: rgb(0, 160, 0);
+      --accent-soft: #e6f2fa;
+      --warn-soft: #fff8eb;
+      --warn-border: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, "Segoe UI", sans-serif;
+      line-height: 1.75;
+      font-size: 15px;
+    }
+    header {
+      background: #1e293b;
+      color: #f8fafc;
+      padding: 28px 24px;
+      border-bottom: 4px solid var(--blue);
+    }
+    .container {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    header h1 {
+      margin: 0 0 8px 0;
+      font-size: 25px;
+      letter-spacing: 0.01em;
+    }
+    header p {
+      margin: 0;
+      color: #cbd5e1;
+      font-size: 14.5px;
+    }
+    .top-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .btn-link {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 5px;
+      font-size: 12.5px;
+      font-weight: 600;
+      text-decoration: none;
+      background: #334155;
+      color: #f8fafc;
+      border: 1px solid #475569;
+      transition: background 0.15s;
+    }
+    .btn-link:hover { background: #475569; }
+    .btn-link.primary {
+      background: var(--blue);
+      border-color: #0284c7;
+    }
+    nav.toc {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin: 22px 0;
+    }
+    nav.toc h2 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      border: none;
+      padding: 0;
+    }
+    nav.toc ol {
+      margin: 0;
+      padding-left: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 6px 24px;
+      font-size: 14px;
+    }
+    nav.toc a { color: var(--blue); text-decoration: none; font-weight: 500; }
+    nav.toc a:hover { text-decoration: underline; }
+    section.card {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px 28px;
+      margin-bottom: 22px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+    h2 {
+      margin-top: 0;
+      font-size: 19.5px;
+      color: #0f172a;
+      border-bottom: 2px solid #e5e7eb;
+      padding-bottom: 8px;
+    }
+    h3 {
+      font-size: 16px;
+      color: #1e293b;
+      margin-top: 22px;
+      margin-bottom: 8px;
+    }
+    code {
+      background: var(--code-bg);
+      border: 1px solid #dde2e8;
+      border-radius: 4px;
+      padding: 1px 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13.5px;
+    }
+    .callout {
+      background: var(--accent-soft);
+      border-left: 4px solid var(--blue);
+      padding: 12px 16px;
+      border-radius: 0 6px 6px 0;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    .callout.warn {
+      background: var(--warn-soft);
+      border-left-color: var(--warn-border);
+    }
+    .ui-mockup {
+      display: grid;
+      grid-template-columns: 225px 180px 1fr;
+      gap: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 16px 0;
+      font-size: 12.5px;
+    }
+    @media (max-width: 760px) {
+      .ui-mockup { grid-template-columns: 1fr; }
+    }
+    .mock-panel {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px;
+    }
+    .mock-title {
+      font-weight: 700;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      color: #374151;
+    }
+    .mock-plot {
+      border: 1px dashed #9ca3af;
+      background: #f9fafb;
+      border-radius: 4px;
+      padding: 10px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .mock-bottom-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12.5px;
+      font-weight: 700;
+      border: 1px solid rgba(0,0,0,0.12);
+    }
+    .swatch {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .step-list {
+      counter-reset: step;
+      list-style: none;
+      padding-left: 0;
+    }
+    .step-list > li {
+      position: relative;
+      padding-left: 40px;
+      margin-bottom: 16px;
+    }
+    .step-list > li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 3px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .math-block {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin: 12px 0;
+      overflow-x: auto;
+      text-align: center;
+    }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 14px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 14px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 9px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f1f5f9;
+      font-weight: 700;
+      color: #1e293b;
+    }
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <div class="top-bar">
+      <span style="font-size:12.5px; font-weight:700; letter-spacing:0.04em; color:#38bdf8;">
+        工学系学生・音声研究者のための技術チュートリアル
+      </span>
+      <div class="nav-links">
+        <a class="btn-link primary" href="acoustic_checker_gfft.html">アプリを起動する</a>
+        <a class="btn-link" href="tutorial_en.html">English Tutorial</a>
+      </div>
+    </div>
+    <h1>Acoustic Checker by Giant-FFT (Web Edition) 解説・操作ガイド</h1>
+    <p>ブラウザ単体で動作する全二重（Full-Duplex）音響計測ツール：線形時不変（LTI）応答・ランダム時変／非線形歪み（RTV）フロア・間接音レベル・オクターブ帯域パワー減衰の同時実時間計測</p>
+  </div>
+</header>
+
+<main class="container">
+
+  <nav class="toc">
+    <h2>目次</h2>
+    <ol>
+      <li><a href="#overview">1. 概要：音声研究・音響実験における意義</a></li>
+      <li><a href="#layout">2. 画面構成と各パネルの役割</a></li>
+      <li><a href="#workflow">3. 計測の手順（ステップ・バイ・ステップ）</a></li>
+      <li><a href="#calibration">4. 絶対音圧レベル（SPL）校正と音声メモ</a></li>
+      <li><a href="#plots">5. 3つのリアルタイムグラフの読み解き方</a></li>
+      <li><a href="#theory">6. 信号処理の理論的背景（Giant-FFT と定QガウスBPF）</a></li>
+      <li><a href="#files">7. 自動保存されるファイルと再現性の確保</a></li>
+      <li><a href="#tips">8. 正確な計測のための注意点・トラブルシューティング</a></li>
+    </ol>
+  </nav>
+
+  <!-- SECTION 1 -->
+  <section class="card" id="overview">
+    <h2>1. 概要：音声研究・音響実験における意義</h2>
+    <p>
+      音声コーパスの収録、マイクロホンアレイの評価、あるいは聴覚実験を行う際、事前に収録室や再生・収音系の音響特性を把握しておくことは極めて重要です。スピーカの非線形歪み、空調による低域暗騒音、机面からの初期反射、過剰な残響、あるいはOS標準の意図しない音声フィルタリングが存在すると、基本周波数（<math><msub><mi>f</mi><mn>0</mn></msub></math>）推定やスペクトル包絡分析、音声了解度評価の信頼性が大きく損なわれます。
+    </p>
+    <p>
+      <strong>Acoustic Checker by Giant-FFT (Web Edition)</strong>（河原英紀 開発、MITライセンス）は、外部ライブラリやWebサーバを一切必要とせず、単一のHTMLファイル（ローカルの <code>file://</code> 直開きを含む）としてWebブラウザ上で動作する音響チェッカです。周期 <math><mi>N</mi></math> の巡回型試験信号（Cyclic data）を連続再生しながら同時収音し、任意長高速フーリエ変換（Giant-FFT）を100 ms周期で適用することで、以下の音響情報をリアルタイムに分離・可視化します。
+    </p>
+    <ul>
+      <li><strong>線形時不変（LTI: Linear Time-Invariant）伝達特性：</strong> スピーカ・室内・マイクロホン系本来の線形周波数応答およびインパルス応答。</li>
+      <li><strong>時変・非線形（RTV: Random Time-Varying）フロア：</strong> 試験信号を鳴らしたままの状態で分離される背景雑音、空調等の時間変動成分、および大振幅時の非線形歪み成分。</li>
+      <li><strong>間接音・後期残響成分（直接音ピーク +15 ms 以降）：</strong> 直接音に対する残響エネルギー比（DRR: Direct-to-Reverberant Ratio）を帯域別に評価するための指標。</li>
+      <li><strong>帯域別パワー応答（残響減衰曲線）：</strong> 任意の周波数帯域における1オクターブ幅のエネルギー減衰過程（残響時間や不自然な反射の診断）。</li>
+    </ul>
+  </section>
+
+  <!-- SECTION 2 -->
+  <section class="card" id="layout">
+    <h2>2. 画面構成と各パネルの役割</h2>
+    <p>画面は左・中央・右の3カラムで構成されており、誤操作を防ぐため設定完了順にボタンやメニューが段階的に有効化されます。</p>
+
+    <div class="ui-mockup">
+      <div class="mock-panel">
+        <div class="mock-title">左パネル: System &amp; Stream Control</div>
+        <ul style="margin:0; padding-left:16px;">
+          <li><strong>System Status</strong>（次にすべき操作の案内）</li>
+          <li><strong>Input / Output device</strong> 選択</li>
+          <li><strong>Sampling frequency</strong>（8k〜96kHz）</li>
+          <li><strong>Input Channels</strong>（入力チャネル数）</li>
+          <li><strong>Load cyclic data</strong>（周期信号読込）</li>
+          <li><strong>Output channel</strong>（L / R / L and R）</li>
+          <li><strong>Spectrum display</strong>（平滑化切替）</li>
+          <li><strong>START</strong> / <strong>STOP</strong>（計測開始・停止）</li>
+          <li><strong>snapshot GUI</strong>（画面全体のPNG保存）</li>
+        </ul>
+      </div>
+      <div class="mock-panel">
+        <div class="mock-title">中央パネル: Workspace &amp; Calibration</div>
+        <ul style="margin:0; padding-left:16px;">
+          <li><strong>Set working folder</strong>（最初にクリック）</li>
+          <li><strong>Recording</strong> 状態表示ランプ</li>
+          <li><strong>Voice memo 5s</strong>（5秒間の音声メモ録音）</li>
+          <li><strong>Calibration Ch-1</strong> 枠：
+            <ul>
+              <li><code>Calibrate</code>（校正信号再生）</li>
+              <li><code>Measured SPL</code>（騒音計読取値）</li>
+              <li><code>CAL. Value: dB</code>（算出補正値）</li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+      <div class="mock-panel">
+        <div class="mock-title">右パネル: Real-Time Acoustic Analysis</div>
+        <div class="mock-plot">
+          <strong>上段プロット：伝達関数スペクトル</strong><br>
+          LTIゲイン 対 RTVフロア（20 Hz – <math><msub><mi>f</mi><mi>s</mi></msub><mo>/</mo><mn>2</mn></math>）
+        </div>
+        <div style="text-align:center; font-size:11.5px; margin-bottom:8px; background:#eef2ff; padding:3px; border-radius:4px;">
+          <strong>BPF fc スライダ：</strong> 緑色カーソル周波数・減衰観察帯域のリアルタイム変更
+        </div>
+        <div class="mock-bottom-grid">
+          <div class="mock-plot" style="margin-bottom:0;">
+            <strong>左下プロット：Band SPL</strong><br>
+            信号・歪み/雑音・間接音(+15 ms)・スナップショット比較
+          </div>
+          <div class="mock-plot" style="margin-bottom:0;">
+            <strong>右下プロット：Power response</strong><br>
+            1 kHz基準 と 選択帯域 <math><msub><mi>f</mi><mi>c</mi></msub></math> のパワー減衰（0–1.0 s）
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3 -->
+  <section class="card" id="workflow">
+    <h2>3. 計測の手順（ステップ・バイ・ステップ）</h2>
+    <p>
+      本アプリケーションはステートマシン（状態遷移）方式を採用しており、左上の <strong>System Status</strong> に表示される指示に沿って順番に設定を進めます。
+    </p>
+
+    <ol class="step-list">
+      <li>
+        <strong>作業フォルダの設定（中央パネル <code>Set working folder</code>）：</strong><br>
+        起動後、最初に中央パネル一番上の <code>Set working folder</code> をクリックします。Google Chrome や Microsoft Edge ではフォルダ選択ダイアログが開き、指定したフォルダ内にタイムスタンプ付きのサブフォルダ <code>acTestYYYYMMDDHHMMSS</code> が自動生成され、以降の計測データや画像がダイアログなしで直接保存されます（Safari / Firefox 等の非対応環境では通常のブラウザダウンロードに自動フォールバックします）。直後にマイク権限の許可が求められますので許可してください。
+      </li>
+      <li>
+        <strong>入出力オーディオデバイスの選択（左パネル）：</strong><br>
+        <em>Input / Output device selection</em> の下に2つのドロップダウンが現れます。上段が<strong>入力デバイス（マイクロホン／オーディオIF）</strong>、下段が<strong>出力デバイス（スピーカ／オーディオIF、Chrome/Edge対応）</strong>です。
+        <div class="callout warn">
+          <strong>操作順序の重要ポイント：</strong> 出力先を変更したい場合は、必ず<strong>先に下段の出力デバイスを選択</strong>し、<strong>その後に上段の入力デバイスを選択</strong>してください。上段の入力デバイスを選択した瞬間に両ドロップダウンが確定（ロック）され、次のサンプリング周波数設定へ進みます。
+        </div>
+      </li>
+      <li>
+        <strong>サンプリング周波数の選択（<code>Sampling frequency</code>）：</strong><br>
+        <code>8000</code>〜<code>96000</code> Hz（通常の音声・室内音響計測では <code>48000</code> Hz）を選択します。なお、手順5で周期信号ファイルを読み込むと、ファイル自身のサンプリング周波数に自動更新されます。
+      </li>
+      <li>
+        <strong>入力チャネル数の選択（<code>Input Channels</code>）：</strong><br>
+        <code>1</code>（または <code>2</code>）を選択します。これにより周期データの読み込み、スペクトル表示モード、および5秒音声メモ機能が有効化されます（本Web版のリアルタイム解析対象は Ch-1［先頭チャネル］です）。
+      </li>
+      <li>
+        <strong>巡回型試験信号の読み込み（<code>Load cyclic data</code>）と出力チャネル設定：</strong><br>
+        <code>Load cyclic data</code> をクリックし、非圧縮の <code>.wav</code>, <code>.aif</code>, <code>.aiff</code> 形式の周期試験信号ファイル（直交周期系列、周期ベルベットノイズ、TSP信号など。インパルス応答窓長1秒を確保するため周期長 <math><mi>N</mi><mo>&ge;</mo><mn>3</mn><msub><mi>f</mi><mi>s</mi></msub></math> の信号を推奨）を選択します。あわせて <strong>Output channel</strong>（<code>L</code>, <code>R</code>, <code>L and R</code>）で再生チャネルを指定します。
+      </li>
+      <li>
+        <strong>リアルタイム計測の実行（<code>START</code> &rarr; 観察 &rarr; <code>STOP</code>）：</strong><br>
+        <code>START</code> を押すと周期信号の連続ループ再生（最大300秒）と同時収音が開始されます。ブラウザ標準のエコーキャンセラ・ノイズ抑制・自動ゲイン制御はすべて無効化された状態で収音され、1周期分（<math><mi>N</mi></math> サンプル）のデータが蓄積された時点から100 msごとに3つのグラフが更新されます。
+        <ul>
+          <li><strong>Spectrum display</strong> で <code>Raw DFT</code>（生DFT）、<code>1/3 octave smoothed</code>、<code>1/12 octave smoothed</code> を切り替えられます。</li>
+          <li><strong>BPF fc</strong> スライダを動かすと緑色の縦カーソルが移動し、右下グラフの減衰曲線がその周波数帯域にリアルタイム追従します。</li>
+          <li><strong>Snapshot Level</strong> を押すと、その瞬間のBand SPL曲線が緑色ラインとして固定表示され、マイク位置や吸音材有無によるA/B比較が行えます。</li>
+        </ul>
+        確認が終わったら <code>STOP</code> を押します。開始直後1周期分および全区間の再生・収音波形（計4ファイル、24-bit WAV）が自動保存され、初回停止後に中央パネルの <strong>Calibrate</strong> ボタンが有効になります。
+      </li>
+    </ol>
+  </section>
+
+  <!-- SECTION 4 -->
+  <section class="card" id="calibration">
+    <h2>4. 絶対音圧レベル（SPL）校正と音声メモ</h2>
+
+    <h3>4.1 Ch-1 音圧レベル校正（<code>Calibration Ch-1</code>）</h3>
+    <p>
+      未校正の状態では、左下 Band SPL の縦軸はデジタルフルスケール基準の相対値 <code>SPL CAL.NO (dB)</code>（<math><mo>-</mo><mn>110</mn></math>〜<math><mn>0</mn><mtext>&nbsp;dB</mtext></math>）を表示しています。一度以上 <code>START</code> &rarr; <code>STOP</code> を実行すると、騒音計（サウンドレベルメータ）を用いた物理音圧レベル（dB SPL re 20 &mu;Pa）への校正が可能になります。
+    </p>
+    <ol>
+      <li>校正済みの<strong>普通騒音計（または精密騒音計）</strong>のマイク部を計測用Ch-1マイクの直近に並べて設置します。騒音計の周波数重み付け特性は<strong>Z特性（平坦 / Flat）</strong>または<strong>C特性</strong>、時間重み付けは Slow に設定します（校正信号の中心が 1 kHz のため特性間の差は小さいですが、Z特性が基本です）。</li>
+      <li>中央パネルの <strong>Calibrate</strong> をクリックします。1 kHz を中心とする1オクターブ帯域幅（<math><mn>707</mn><mtext>&nbsp;Hz</mtext></math>〜<math><mn>1414</mn><mtext>&nbsp;Hz</mtext></math>、1 Hz間隔のランダム位相マルチサイン波、実効値振幅 <math><mn>0.1</mn></math> すなわち <math><mo>-</mo><mn>20</mn><mtext>&nbsp;dBFS</mtext></math>）が連続再生され、緑色の Recording ランプが点灯します。</li>
+      <li>音場と騒音計の指示値が安定するまで <strong>3.1秒以上</strong> 待つと、<code>Measured SPL</code> ドロップダウンが自動的に選択可能になります。</li>
+      <li>騒音計の読み取り値（<code>95</code>〜<code>65</code> dB の整数値）を <code>Measured SPL</code> ドロップダウンから選択します。</li>
+      <li>選択と同時に再生が停止し、直近3秒間の収音信号の標本標準偏差 <math><msub><mi>&sigma;</mi><mi>y</mi></msub></math> からデジタル実効値レベル <math><msub><mi>L</mi><mtext>obs</mtext></msub><mo>=</mo><mn>20</mn><msub><mi>log</mi><mn>10</mn></msub><mo>(</mo><msub><mi>&sigma;</mi><mi>y</mi></msub><mo>)</mo></math> が計算され、校正オフセット値 <math><msub><mi>C</mi><mtext>dB</mtext></msub><mo>=</mo><msub><mi>L</mi><mtext>SLM</mtext></msub><mo>-</mo><msub><mi>L</mi><mtext>obs</mtext></msub></math> が <code>CAL. Value: dB</code> に記録されます。以降、Band SPL の縦軸が絶対音圧 <code>CAL. SPL (dB)</code>（<math><mn>0</mn></math>〜<math><mn>100</mn><mtext>&nbsp;dB</mtext></math>）に切り替わります。</li>
+    </ol>
+
+    <h3>4.2 実験条件の口頭記録（<code>Voice memo 5s</code>）</h3>
+    <p>
+      収録実験では「どのファイルがどのマイク距離・プリアンプ設定だったか」の記録漏れが頻繁に起こります。ストリーム停止中に <strong>Voice memo 5s</strong> を押すと、5秒間の音声メモが収音され、最大振幅 <math><mn>0.5</mn></math>（<math><mo>-</mo><mn>6</mn><mtext>&nbsp;dBFS</mtext></math>）にピーク正規化された上で <code>voiceMemoYYYYMMDDHHMMSSr.wav</code> として同一作業フォルダ内に保存されます。
+    </p>
+  </section>
+
+  <!-- SECTION 5 -->
+  <section class="card" id="plots">
+    <h2>5. 3つのリアルタイムグラフの読み解き方</h2>
+
+    <h3>5.1 上段プロット：伝達関数スペクトル（LTI 対 RTV）</h3>
+    <p>横軸は対数周波数（<math><mn>20</mn><mtext>&nbsp;Hz</mtext></math>〜<math><msub><mi>f</mi><mi>s</mi></msub><mo>/</mo><mn>2</mn></math>）、縦軸は相対レベル（<math><mo>-</mo><mn>80</mn></math>〜<math><mo>+</mo><mn>20</mn><mtext>&nbsp;dB</mtext></math>）です。</p>
+    <ul>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,114,189);"></span>青線（LTI）</span>
+        <strong>線形時不変（LTI）伝達特性：</strong> 周期インパルス応答の先頭区間から求めた周波数応答です。定在波による鋭いディップやピークを見るには <code>Raw DFT</code>、スピーカや部屋の巨視的な周波数バランスを見るには <code>1/3</code> または <code>1/12 octave smoothed</code> を使用します。
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(217,83,25);"></span>オレンジ線（RTV）</span>
+        <strong>時変・非線形歪み・背景雑音フロア（RTV）：</strong> 周期インパルス応答の半周期シフト位置（<math><mi>N</mi><mo>/</mo><mn>2</mn></math>）から抽出した誤差スペクトルです。高精度な音声収録・音響計測には、音声帯域（<math><mn>100</mn><mtext>&nbsp;Hz</mtext></math>〜<math><mn>16</mn><mtext>&nbsp;kHz</mtext></math>）全域で<strong>青線がオレンジ線より 30〜45 dB 以上高く保たれていること</strong>が目安となります。低域で差が縮まる場合は空調・振動騒音、再生音量を上げた際に差が縮まる場合はスピーカやマイクアンプの非線形歪み（飽和）を疑います。
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,180,0);"></span>緑色の縦線</span>
+        <strong>BPF <math><msub><mi>f</mi><mi>c</mi></msub></math> カーソル：</strong> 下部スライダで選択中の中心周波数を示します。
+      </li>
+    </ul>
+
+    <h3>5.2 左下プロット：Band SPL（1オクターブ帯域音圧レベル分解）</h3>
+    <p><math><mn>1</mn><mo>/</mo><mn>24</mn></math> オクターブ間隔の各中心周波数 <math><msub><mi>f</mi><mi>c</mi></msub></math> まわりにおける1オクターブ帯域（<math><mo>[</mo><msub><mi>f</mi><mi>c</mi></msub><msup><mn>2</mn><mrow><mo>-</mo><mn>1</mn><mo>/</mo><mn>2</mn></mrow></msup><mo>,</mo><msub><mi>f</mi><mi>c</mi></msub><msup><mn>2</mn><mrow><mo>+</mo><mn>1</mn><mo>/</mo><mn>2</mn></mrow></msup><mo>]</mo></math>）のエネルギー積算レベルを表示します。</p>
+    <ul>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,114,189);"></span>青線（Signal）</span>
+        <strong>観測信号のオクターブ帯域SPL：</strong> 収音信号全体の帯域音圧レベルです。
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(237,177,32);"></span>黄線（Indirect / 間接音）</span>
+        <strong>間接音・残響成分レベル（直接音ピーク +15 ms 以降）：</strong> 直接音到来時刻から <strong>15 ms 以降</strong>に到来する反射・残響エネルギーの換算帯域レベルです。<strong>青線と黄線のレベル差が直接音対残響音比（DRR）</strong>に対応します。防音ブースや接話収録では黄線が青線より十分に低くなりますが、一般居室でマイク距離が離れると黄線が青線に接近し、残響支配の音場であることが一目で分かります。
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(217,83,25);"></span>オレンジ線（Distortion / Noise）</span>
+        <strong>RTV（雑音・歪み）換算帯域SPL：</strong> 各オクターブ帯域における実効雑音・歪みフロアです。青線との差が帯域別実効SNRになります。
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,160,0);"></span>緑線（Snapshot）</span>
+        <strong>Snapshot Level 基準線：</strong> <code>Snapshot Level</code> ボタン押下時に保持された比較用基準カーブです。
+      </li>
+    </ul>
+
+    <h3>5.3 右下プロット：Power response（帯域別パワー減衰特性）</h3>
+    <p>横軸は時間（<math><mn>0</mn></math>〜<math><mn>1.0</mn><mtext>&nbsp;s</mtext></math>）、縦軸はピーク値を <math><mn>0</mn><mtext>&nbsp;dB</mtext></math> とした正規化パワーレベル（<math><mo>-</mo><mn>70</mn></math>〜<math><mn>0</mn><mtext>&nbsp;dB</mtext></math>）です。</p>
+    <ul>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,114,189);"></span>青線（1 kHz 基準）</span>
+        <strong>1 kHz オクターブ帯域パワー減衰曲線：</strong> 常に固定表示される 1000 Hz 中心の減衰特性です。
+      </li>
+      <li>
+        <span class="badge"><span class="swatch" style="background:rgb(0,180,0);"></span>緑線（選択 <math><msub><mi>f</mi><mi>c</mi></msub></math> 帯域）</span>
+        <strong>BPF <math><msub><mi>f</mi><mi>c</mi></msub></math> オクターブ帯域パワー減衰曲線：</strong> スライダで選んだ <math><msub><mi>f</mi><mi>c</mi></msub></math> を中心に、<math><mn>1</mn><mo>/</mo><mn>24</mn></math> オクターブ間隔で配置された前後23チャネル（<math><mo>&plusmn;</mo><mn>11</mn><mo>/</mo><mn>24</mn></math> オクターブ範囲）の定Qガウスフィルタ出力パワーを合成した時間包絡です。壁やガラス窓からの孤立エコー（減衰途中の鋭い突起）や、低域での残響時間の伸び、暗騒音フロアへの漸近の様子を周波数別に詳しく確認できます。
+      </li>
+    </ul>
+  </section>
+
+  <!-- SECTION 6 -->
+  <section class="card" id="theory">
+    <h2>6. 信号処理の理論的背景（Giant-FFT と定QガウスBPF）</h2>
+
+    <h3>6.1 Bluestein の Chirp-Z アルゴリズムによる任意長 Giant-FFT</h3>
+    <p>
+      一般的なリアルタイムFFTアナライザは 4096 点などの短い <math><msup><mn>2</mn><mi>m</mi></msup></math> 点フレームに窓関数を掛けて分析するため、窓関数によるスペクトル漏れ（リーケージ）が生じ、長い残響や <math><mi>N</mi><mo>=</mo><mn>48000</mn></math> 点・<math><mn>144000</mn></math> 点といった任意の整数秒周期信号を正確に1フレームで扱うことができません。本アプリの <code>fftGeneral()</code> は、<math><mi>N</mi></math> が2のべき乗のときは基数2の Cooley–Tukey 法を用い、任意の自然数 <math><mi>N</mi></math> に対しては <strong>Bluestein の Chirp-Z 変換</strong>を用いて <math><mi>M</mi><mo>=</mo><msup><mn>2</mn><mrow><mo>&lceil;</mo><msub><mi>log</mi><mn>2</mn></msub><mo>(</mo><mn>2</mn><mi>N</mi><mo>-</mo><mn>1</mn><mo>)</mo><mo>&rceil;</mo></mrow></msup></math> 点の高速畳み込みへと帰着させます。
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <mi>X</mi><mo>[</mo><mi>k</mi><mo>]</mo>
+        <mo>=</mo>
+        <munderover><mo>&sum;</mo><mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>N</mi><mo>-</mo><mn>1</mn></mrow></munderover>
+        <mi>x</mi><mo>[</mo><mi>n</mi><mo>]</mo>
+        <msup><mi>e</mi><mrow><mo>-</mo><mi>j</mi><mfrac><mrow><mn>2</mn><mi>&pi;</mi></mrow><mi>N</mi></mfrac><mi>n</mi><mi>k</mi></mrow></msup>
+        <mo>=</mo>
+        <msup><mi>b</mi><mo>*</mo></msup><mo>[</mo><mi>k</mi><mo>]</mo>
+        <munderover><mo>&sum;</mo><mrow><mi>n</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>N</mi><mo>-</mo><mn>1</mn></mrow></munderover>
+        <mrow><mo>(</mo><mi>x</mi><mo>[</mo><mi>n</mi><mo>]</mo><msup><mi>b</mi><mo>*</mo></msup><mo>[</mo><mi>n</mi><mo>]</mo><mo>)</mo></mrow>
+        <mi>b</mi><mo>[</mo><mi>k</mi><mo>-</mo><mi>n</mi><mo>]</mo>
+        <mo>,</mo>
+        <mspace width="1.2em"/>
+        <mi>b</mi><mo>[</mo><mi>k</mi><mo>]</mo>
+        <mo>=</mo>
+        <msup><mi>e</mi><mrow><mi>j</mi><mfrac><mi>&pi;</mi><mi>N</mi></mfrac><mrow><mo>(</mo><msup><mi>k</mi><mn>2</mn></msup><mo>mod</mo><mn>2</mn><mi>N</mi><mo>)</mo></mrow></mrow></msup>
+      </math>
+    </div>
+    <p>
+      チャープ系列 <math><mi>b</mi><mo>[</mo><mi>k</mi><mo>]</mo></math> とその <math><mi>M</mi></math> 点FFTは <code>bluesteinCache</code> にキャッシュされるため、周期長 <math><mi>N</mi></math> に一切制約を設けることなく、窓関数なしの厳密な周期デコンボリューションを100 ms周期で実行できます。
+    </p>
+
+    <h3>6.2 周波数領域デコンボリューションと時間窓による成分分離</h3>
+    <p>
+      直近1周期分の参照信号 <math><mi>x</mi><mo>[</mo><mi>n</mi><mo>]</mo></math> と収音信号 <math><mi>y</mi><mo>[</mo><mi>n</mi><mo>]</mo></math>（長さ <math><mi>N</mi></math>）のDFT <math><mi>X</mi><mo>[</mo><mi>k</mi><mo>]</mo><mo>,</mo><mi>Y</mi><mo>[</mo><mi>k</mi><mo>]</mo></math> から、周期インパルス応答 <math><mi>h</mi><mo>[</mo><mi>n</mi><mo>]</mo></math> を次式で算出します。
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <mi>H</mi><mo>[</mo><mi>k</mi><mo>]</mo>
+        <mo>=</mo>
+        <mfrac>
+          <mrow><mi>Y</mi><mo>[</mo><mi>k</mi><mo>]</mo><msup><mi>X</mi><mo>*</mo></msup><mo>[</mo><mi>k</mi><mo>]</mo></mrow>
+          <mrow><mi>max</mi><mo>(</mo><msup><mrow><mo>|</mo><mi>X</mi><mo>[</mo><mi>k</mi><mo>]</mo><mo>|</mo></mrow><mn>2</mn></msup><mo>,</mo><msup><mn>10</mn><mrow><mo>-</mo><mn>30</mn></mrow></msup><mo>)</mo></mrow>
+        </mfrac>
+        <mo>,</mo>
+        <mspace width="1.5em"/>
+        <mi>h</mi><mo>[</mo><mi>n</mi><mo>]</mo>
+        <mo>=</mo>
+        <mo>&Re;</mo><mrow><mo>{</mo><msub><mtext>IFFT</mtext><mi>N</mi></msub><mo>(</mo><mi>H</mi><mo>[</mo><mi>k</mi><mo>]</mo><mo>)</mo><mo>}</mo></mrow>
+      </math>
+    </div>
+    <p>
+      インパルス応答解析長を <math><mi>L</mi><mo>=</mo><mi>min</mi><mo>(</mo><msub><mi>f</mi><mi>s</mi></msub><mo>,</mo><mo>&lfloor;</mo><mi>N</mi><mo>/</mo><mn>3</mn><mo>&rfloor;</mo><mo>)</mo></math>、最大振幅時刻（直接音ピーク）を <math><msub><mi>n</mi><mtext>peak</mtext></msub><mo>=</mo><mi>arg</mi><munder><mi>max</mi><mi>n</mi></munder><mo>|</mo><mi>h</mi><mo>[</mo><mi>n</mi><mo>]</mo><mo>|</mo></math> とし、巡回インデックス（<math><mo>mod</mo><mi>N</mi></math>）により長さ <math><mi>L</mi></math> の3成分を切り出します（<math><mn>0</mn><mo>&le;</mo><mi>i</mi><mo>&lt;</mo><mi>L</mi></math>）。
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <msub><mi>h</mi><mtext>LTI</mtext></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>=</mo><mi>h</mi><mo>[</mo><mi>i</mi><mo>]</mo>
+        <mo>,</mo><mspace width="1.2em"/>
+        <msub><mi>h</mi><mtext>IND</mtext></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>=</mo><mi>h</mi><mrow><mo>[</mo><mo>(</mo><mi>i</mi><mo>+</mo><msub><mi>n</mi><mtext>peak</mtext></msub><mo>+</mo><mo>&lfloor;</mo><mn>0.015</mn><msub><mi>f</mi><mi>s</mi></msub><mo>+</mo><mn>0.5</mn><mo>&rfloor;</mo><mo>)</mo><mo>mod</mo><mi>N</mi><mo>]</mo></mrow>
+        <mo>,</mo><mspace width="1.2em"/>
+        <msub><mi>h</mi><mtext>RTV</mtext></msub><mo>[</mo><mi>i</mi><mo>]</mo><mo>=</mo><mi>h</mi><mrow><mo>[</mo><mo>(</mo><mi>i</mi><mo>+</mo><mo>&lfloor;</mo><mi>N</mi><mo>/</mo><mn>2</mn><mo>&rfloor;</mo><mo>)</mo><mo>mod</mo><mi>N</mi><mo>]</mo></mrow>
+      </math>
+    </div>
+    <p>
+      半周期シフト位置 <math><mo>&lfloor;</mo><mi>N</mi><mo>/</mo><mn>2</mn><mo>&rfloor;</mo></math> では室内線形インパルス応答が十分に減衰している（あるいは対称構造を持つ試験信号により線形応答が相殺される）ため、<math><msub><mi>h</mi><mtext>RTV</mtext></msub></math> には系の時間変動（RTV）・非線形歪み・背景雑音のみが抽出されます。
+    </p>
+
+    <h3>6.3 定Q対数周波数ガウス型帯域通過フィルタバンク</h3>
+    <p>
+      MATLAB版 <code>constantQgaussBPFweight.m</code> を忠実に移植したフィルタバンクであり、最低中心周波数 <math><msub><mi>f</mi><mtext>low</mtext></msub><mo>=</mo><mn>1000</mn><mo>&times;</mo><msup><mn>2</mn><mrow><mo>-</mo><mn>6</mn></mrow></msup><mo>=</mo><mn>15.625</mn><mtext>&nbsp;Hz</mtext></math> からナイキスト周波数まで <math><mn>1</mn><mo>/</mo><mn>24</mn></math> オクターブ間隔で配置された対数周波数軸上のガウス重みを用います。
+    </p>
+    <div class="math-block">
+      <math display="block">
+        <msub><mi>W</mi><mi>m</mi></msub><mo>(</mo><mi>f</mi><mo>)</mo>
+        <mo>&prop;</mo>
+        <mi>exp</mi><mrow><mo>(</mo><mo>-</mo><mfrac><msup><mrow><mo>(</mo><msub><mi>log</mi><mn>2</mn></msub><mi>f</mi><mo>-</mo><msub><mi>log</mi><mn>2</mn></msub><msub><mi>f</mi><mrow><mi>c</mi><mo>,</mo><mi>m</mi></mrow></msub><mo>)</mo></mrow><mn>2</mn></msup><mrow><mn>2</mn><msubsup><mi>&sigma;</mi><mtext>oct</mtext><mn>2</mn></msubsup></mrow></mfrac><mo>)</mo></mrow>
+        <mo>,</mo>
+        <mspace width="1.2em"/>
+        <msub><mi>&sigma;</mi><mtext>oct</mtext></msub>
+        <mo>=</mo>
+        <mfrac><msub><mi>B</mi><mtext>oct</mtext></msub><mrow><mn>2</mn><mo>&sdot;</mo><mo>(</mo><mn>2</mn><msup><mi>&Phi;</mi><mrow><mo>-</mo><mn>1</mn></mrow></msup><mo>(</mo><mn>0.75</mn><mo>)</mo><mo>)</mo></mrow></mfrac>
+        <mo>&approx;</mo>
+        <mfrac><msub><mi>B</mi><mtext>oct</mtext></msub><mrow><mn>2</mn><mo>&times;</mo><mn>1.34898</mn></mrow></mfrac>
+      </math>
+    </div>
+    <p>
+      急峻な矩形フィルタと異なり時間領域でのリンギングを生じないため、振幅重み <math><msqrt><msub><mi>W</mi><mi>m</mi></msub><mo>(</mo><mi>f</mi><mo>)</mo></msqrt></math> を用いた逆FFT合成により滑らかで物理的解釈の容易な残響パワー減衰曲線が得られます。
+    </p>
+  </section>
+
+  <!-- SECTION 7 -->
+  <section class="card" id="files">
+    <h2>7. 自動保存されるファイルと再現性の確保</h2>
+    <p>
+      すべての録音データはダイナミックレンジ約 144 dB を有する非圧縮 <strong>24-bit リニアPCM WAV形式</strong>でエンコードされ、作業フォルダ <code>acTestYYYYMMDDHHMMSS/</code> 内に保存されます（<code>&lt;TS&gt;</code> は保存時刻 <code>YYYYMMDDHHMMSS</code>）。MATLAB や Python を用いた事後の精密オフライン解析にそのまま利用可能です。
+    </p>
+    <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ファイル名パターン</th>
+          <th>形式・チャネル数</th>
+          <th>保存タイミング</th>
+          <th>収録内容と研究用途</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>initialSourceAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, モノラル</td>
+          <td><code>STOP</code> 時</td>
+          <td>計測開始直後の最初の1周期分（<math><mi>N</mi></math> サンプル）の参照試験信号。</td>
+        </tr>
+        <tr>
+          <td><code>initialCapturedAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, モノラル</td>
+          <td><code>STOP</code> 時</td>
+          <td>計測開始直後の最初の1周期分の生収音信号（立ち上がり過渡応答および入出力遅延の確認用）。</td>
+        </tr>
+        <tr>
+          <td><code>sourceAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, ステレオ(L/R)</td>
+          <td><code>STOP</code> 時</td>
+          <td><code>START</code> から <code>STOP</code> までに送出された全周期分の2チャネル参照信号波形。</td>
+        </tr>
+        <tr>
+          <td><code>capturedAT&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, モノラル</td>
+          <td><code>STOP</code> 時</td>
+          <td>全計測区間にわたる Ch-1 連続収音波形（同期加算による高SNR解析や経時変動解析用）。</td>
+        </tr>
+        <tr>
+          <td><code>voiceMemo&lt;TS&gt;r.wav</code></td>
+          <td>24-bit WAV, モノラル</td>
+          <td><code>Voice memo 5s</code> 完了時</td>
+          <td>最大振幅 <math><mn>0.5</mn></math>（<math><mo>-</mo><mn>6</mn><mtext>&nbsp;dBFS</mtext></math>）で正規化された5秒間の口頭実験条件メモ。</td>
+        </tr>
+        <tr>
+          <td><code>GUIsnapAT&lt;TS&gt;.png</code></td>
+          <td>HiDPI PNG画像</td>
+          <td><code>snapshot GUI</code> 押下時</td>
+          <td>全3パネル・設定値・校正値・3つのグラフを高解像度描画した実験ノート用スナップショット。</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- SECTION 8 -->
+  <section class="card" id="tips">
+    <h2>8. 正確な計測のための注意点・トラブルシューティング</h2>
+    <ul>
+      <li>
+        <strong>OSレベルの音声処理（ノイズ抑制・声の分離）の無効化【最重要】：</strong> 本アプリはブラウザ（WebRTC）に対して <code>echoCancellation: false</code>, <code>noiseSuppression: false</code>, <code>autoGainControl: false</code> を明示的に指定していますが、近年のOSはブラウザの下層で独自の音声強調処理をかける場合があります。必ず以下を確認してください。
+        <ul>
+          <li><strong>macOS の場合：</strong> 収音中にメニューバー右上のオレンジ色のマイクアイコン（コントロールセンター）を開き、マイクモードが<strong>「標準（Standard）」</strong>になっていることを確認してください（「声を分離（Voice Isolation）」になっていると試験信号が雑音とみなされ強く抑圧されます）。</li>
+          <li><strong>Windows 11 の場合：</strong> 「設定 &rarr; システム &rarr; サウンド」から使用する録音・再生デバイスのプロパティを開き、<strong>「オーディオの強化（Audio Enhancements）」をオフ</strong>に設定してください。</li>
+        </ul>
+      </li>
+      <li>
+        <strong>推奨ブラウザ（Google Chrome / Microsoft Edge）：</strong> デスクトップ版の Chrome または Edge の使用を強く推奨します。File System Access API（<code>showDirectoryPicker</code>）により <code>STOP</code> 時の4ファイル一括保存がバックグラウンドで完結するほか、<code>setSinkId()</code> による出力オーディオIFの個別指定にも対応しています。
+      </li>
+      <li>
+        <strong>ローカルファイル（<code>file://</code>）からの直接起動：</strong> HTMLファイルをダブルクリックしてローカル環境から直接開いても動作します。<code>file://</code> オリジン制約により <code>AudioWorklet</code> がブロックされる環境では、自動的に同等の全二重 <code>ScriptProcessorNode</code> エンジンへフォールバックする設計になっています。
+      </li>
+      <li>
+        <strong>過大入力と非線形歪みの見分け方：</strong> 初回再生時はオーディオIFやアンプの音量を絞った状態から <code>START</code> し、徐々に音量を上げてください。再生音量を上げたとき、上段プロットの青線（LTI）だけでなくオレンジ線（RTV）も一緒に上昇し始める場合は、スピーカの限界またはマイクプリアンプのクリッピング（非線形歪み）が発生しています。
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer>
+  <strong>Acoustic Checker by Giant-FFT (Web Edition)</strong> 技術チュートリアル &bull; Application Copyright &copy; 2026 Hideki Kawahara (MIT License)
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブラックボックスを開く：対話的ツールで辿る音声分析合成の物理と歴史</title>
+    
+    <!-- MathJax for LaTeX Equations -->
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          displayMath: [['$$', '$$'], ['\\[', '\\]']]
+        },
+        svg: { fontCache: 'global' }
+      };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <style>
+      :root {
+        --bg-page: #f7f9fc;
+        --bg-card: #ffffff;
+        --primary: #005a9e;
+        --primary-light: #e8f2fa;
+        --accent: #d95319;
+        --accent-green: #008a00;
+        --text-main: #1f2937;
+        --text-muted: #5b6472;
+        --border-col: #dce3ec;
+        --code-bg: #f1f5f9;
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0; padding: 0;
+        font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Meiryo", -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--bg-page);
+        color: var(--text-main);
+        line-height: 1.75;
+        font-size: 15px;
+      }
+      
+      /* Sticky Top Navigation for Side-by-Side Window Usage */
+      .sticky-nav {
+        position: sticky; top: 0; z-index: 100;
+        background: rgba(25, 33, 44, 0.95);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+        color: #fff;
+        padding: 8px 16px;
+        border-bottom: 1px solid #334155;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 8px;
+      }
+      .sticky-nav .brand {
+        font-size: 13px; font-weight: 700; color: #93c5fd;
+        white-space: nowrap;
+      }
+      .nav-links {
+        display: flex; gap: 4px; flex-wrap: wrap;
+      }
+      .nav-links a {
+        color: #e2e8f0; text-decoration: none;
+        font-size: 12px; font-weight: 600;
+        padding: 4px 9px; border-radius: 4px;
+        background: rgba(255,255,255,0.08);
+        transition: 0.15s;
+      }
+      .nav-links a:hover {
+        background: #0078d4; color: #fff;
+      }
+      
+      /* Main Container optimized for 600px - 820px width */
+      .container {
+        max-width: 780px;
+        margin: 0 auto;
+        padding: 24px 20px 64px;
+      }
+      
+      /* Hero Header */
+      header.hero {
+        background: linear-gradient(135deg, #0f2942 0%, #005a9e 100%);
+        color: #fff;
+        padding: 28px 26px;
+        border-radius: 10px;
+        margin-bottom: 26px;
+        box-shadow: 0 4px 14px rgba(0, 45, 90, 0.15);
+      }
+      header.hero .subtitle {
+        font-size: 12.5px; font-weight: 600; letter-spacing: 0.8px;
+        text-transform: uppercase; color: #93c5fd; margin-bottom: 6px;
+      }
+      header.hero h1 {
+        margin: 0 0 12px; font-size: 22px; line-height: 1.4;
+      }
+      header.hero p {
+        margin: 0; font-size: 14px; color: #e0f2fe; line-height: 1.65;
+      }
+      header.hero .meta {
+        margin-top: 14px; padding-top: 12px;
+        border-top: 1px solid rgba(255,255,255,0.2);
+        font-size: 12.5px; color: #bae6fd;
+        display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+      }
+      
+      /* Section Cards */
+      section.chapter {
+        background: var(--bg-card);
+        border: 1px solid var(--border-col);
+        border-radius: 10px;
+        padding: 24px 26px;
+        margin-bottom: 26px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+        scroll-margin-top: 56px;
+      }
+      .ch-badge {
+        display: inline-block;
+        background: var(--primary-light); color: var(--primary);
+        font-size: 12px; font-weight: 700;
+        padding: 2px 10px; border-radius: 99px;
+        margin-bottom: 8px;
+      }
+      section.chapter h2 {
+        margin: 0 0 14px; font-size: 19px; color: #0f172a;
+        border-bottom: 2px solid var(--primary-light);
+        padding-bottom: 8px;
+      }
+      section.chapter h3 {
+        margin: 22px 0 10px; font-size: 16px; color: #1e3a8a;
+      }
+      
+      /* Hands-on Action Box */
+      .try-box {
+        background: #f8fafc;
+        border-left: 4px solid var(--primary);
+        border-top: 1px solid #e2e8f0;
+        border-right: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e2e8f0;
+        border-radius: 0 8px 8px 0;
+        padding: 14px 18px;
+        margin: 16px 0;
+      }
+      .try-box .try-title {
+        font-weight: 700; font-size: 14px; color: var(--primary);
+        margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+      }
+      .try-box ol, .try-box ul {
+        margin: 0; padding-left: 20px;
+      }
+      .try-box li { margin-bottom: 6px; }
+      .try-box li:last-child { margin-bottom: 0; }
+      
+      /* UI Badge matching VTShapeToSound buttons */
+      .ui-tag {
+        display: inline-block;
+        background: linear-gradient(to bottom, #fff 0%, #e6e6e6 100%);
+        border: 1px solid #999; border-radius: 3px;
+        padding: 0px 6px; font-size: 12.5px; font-weight: 600;
+        color: #111; font-family: -apple-system, sans-serif;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+        margin: 0 2px;
+      }
+      .color-dot {
+        display: inline-block; width: 10px; height: 10px;
+        border-radius: 50%; margin-right: 4px; vertical-align: middle;
+      }
+      
+      /* Deep Dive Accordion (<details>) */
+      details.deep-dive {
+        margin-top: 18px;
+        background: #fffbeb;
+        border: 1px solid #fde68a;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      details.deep-dive summary {
+        padding: 11px 16px;
+        background: #fef3c7;
+        color: #92400e;
+        font-weight: 700; font-size: 14px;
+        cursor: pointer;
+        list-style: none;
+        display: flex; align-items: center; justify-content: space-between;
+      }
+      details.deep-dive summary::-webkit-details-marker { display: none; }
+      details.deep-dive summary::after {
+        content: "＋ クリックして展開";
+        font-size: 11.5px; font-weight: 600;
+        background: rgba(146, 64, 14, 0.12);
+        padding: 2px 8px; border-radius: 4px;
+      }
+      details.deep-dive[open] summary::after {
+        content: "－ 閉じる";
+      }
+      .deep-dive-body {
+        padding: 16px 18px;
+        font-size: 14.2px;
+        color: #334155;
+        border-top: 1px solid #fde68a;
+        background: #fffdf5;
+      }
+      .deep-dive-body p { margin-top: 0; }
+      
+      /* Hybrid Video Player Widget (YouTube + Local MP4 + Download) */
+      .video-card {
+        margin: 18px 0;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #0f172a;
+        color: #f8fafc;
+        overflow: hidden;
+      }
+      .video-header {
+        background: #1e293b;
+        padding: 8px 12px;
+        display: flex; align-items: center; justify-content: space-between;
+        flex-wrap: wrap; gap: 8px;
+        border-bottom: 1px solid #334155;
+      }
+      .video-title {
+        font-size: 13px; font-weight: 600; color: #e2e8f0;
+        display: flex; align-items: center; gap: 6px;
+      }
+      .video-controls {
+        display: flex; gap: 6px; align-items: center;
+      }
+      .v-btn {
+        background: #334155; color: #cbd5e1;
+        border: 1px solid #475569; border-radius: 4px;
+        padding: 3px 9px; font-size: 11.5px; font-weight: 600;
+        cursor: pointer; text-decoration: none;
+        transition: 0.15s;
+      }
+      .v-btn:hover { background: #475569; color: #fff; }
+      .v-btn.active { background: #0284c7; color: #fff; border-color: #38bdf8; }
+      .v-btn.dl-btn { background: #065f46; color: #d1fae5; border-color: #059669; }
+      .v-btn.dl-btn:hover { background: #047857; }
+      
+      .video-stage {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #090d16;
+        display: flex; align-items: center; justify-content: center;
+      }
+      @supports not (aspect-ratio: 16 / 9) {
+        .video-stage {
+          height: 0;
+          padding-top: 56.25%;
+          display: block;
+        }
+        .video-stage iframe, .video-stage video, .video-stage .video-placeholder {
+          position: absolute;
+          top: 0; left: 0;
+          width: 100%; height: 100%;
+        }
+      }
+      mjx-container[display="true"] {
+        overflow-x: auto;
+        overflow-y: hidden;
+        max-width: 100%;
+        -webkit-overflow-scrolling: touch;
+      }
+      .video-stage iframe, .video-stage video {
+        width: 100%; height: 100%; border: none;
+      }
+      .video-placeholder {
+        text-align: center; padding: 20px; color: #94a3b8; font-size: 13px;
+      }
+      .video-placeholder code {
+        background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; color: #38bdf8;
+      }
+      
+      /* Reference List & Footer */
+      .ref-list {
+        font-size: 13px; color: var(--text-muted);
+        padding-left: 20px; margin: 8px 0 0;
+      }
+      .ref-list li { margin-bottom: 4px; }
+      footer {
+        text-align: center; font-size: 12.5px; color: var(--text-muted);
+        margin-top: 40px; padding-top: 20px;
+        border-top: 1px solid var(--border-col);
+      }
+    </style>
+  </head>
+  <body>
+    
+    <!-- ===================================================================== -->
+    <!-- 動画設定 (VIDEO_CONFIG): YouTube ID やローカルMP4パスをここで一括管理 -->
+    <!-- ===================================================================== -->
+    <script>
+      const VIDEO_CONFIG = {
+        intro: {
+          title: "デモ0：ウィンドウの並べ方と最初の音出し（中性母音）",
+          youtubeId: "", // 例: "dQw4w9WgXcQ" （空欄の場合はプレースホルダを表示）
+          localMp4: "videos/00_intro_schwa.mp4"
+        },
+        ch1: {
+          title: "デモ1：声道断面を描いて母音 /a/, /i/, /u/ と声道長スケーリングを体験する",
+          youtubeId: "",
+          localMp4: "videos/01_vt_area_and_vtl.mp4"
+        },
+        ch2: {
+          title: "デモ2：空間フーリエ基底と拡大スライダによる声道形状の連続変形",
+          youtubeId: "",
+          localMp4: "videos/02_fourier_basis.mp4"
+        },
+        ch3: {
+          title: "デモ3：ホルマント極（周波数・帯域幅）の直接ドラッグとLSFの挙動",
+          youtubeId: "",
+          localMp4: "videos/03_poles_and_lsf.mp4"
+        },
+        ch4: {
+          title: "デモ4：L-F声帯音源モデルの波形編集とF0イントネーション描画",
+          youtubeId: "",
+          localMp4: "videos/04_lf_source_designer.mp4"
+        },
+        ch5: {
+          title: "デモ5：リアルタイム・スペクトルモニタで自分の母音とモデルを重ねる",
+          youtubeId: "",
+          localMp4: "videos/05_live_monitor.mp4"
+        }
+      };
+    </script>
+    
+    <!-- Sticky Navigation Bar -->
+    <nav class="sticky-nav">
+      <div class="brand">VTShapeToSound 入門＆歴史ガイド</div>
+      <div class="nav-links">
+        <a href="#sec-intro">序章</a>
+        <a href="#sec-ch1">1. 声道と母音</a>
+        <a href="#sec-ch2">2. フーリエ基底</a>
+        <a href="#sec-ch3">3. 極とLSF</a>
+        <a href="#sec-ch4">4. L-F音源とF0</a>
+        <a href="#sec-ch5">5. 実音声比較</a>
+      </div>
+    </nav>
+    
+    <div class="container">
+      
+      <!-- Hero Header -->
+      <header class="hero">
+        <div class="subtitle">Interactive Speech Science Tutorial for Graduate Students</div>
+        <h1>ブラックボックスを開く：<br>対話的ツールで辿る音声分析合成の物理と歴史</h1>
+        <p>
+          深層学習（End-to-End音声合成・ニューラルボコーダ）が全盛の今、あえて「音響管の断面積」「伝達関数の極（ホルマント）」「線スペクトル対（LSF）」「L-F声帯音源モデル」を自分の手で直接動かし、耳で聴いて確かめるための実験室（ハンズオン・チュートリアル）です。
+        </p>
+        <div class="meta">
+          <span>原設計・アルゴリズム：河原 英紀（和歌山大学名誉教授 / 電気通信大学）</span>
+          <span>対象アプリ：<code>VTShapeToSound.html</code></span>
+        </div>
+      </header>
+      
+      <!-- =================================================================== -->
+      <!-- 序章                                                                -->
+      <!-- =================================================================== -->
+      <section id="sec-intro" class="chapter">
+        <span class="ch-badge">序章・準備</span>
+        <h2>なぜ今、声道断面と極配置を手で触るのか？</h2>
+        <p>
+          現代の音声情報処理では、テキストや音響特徴量をニューラルネットワークに入力すれば、極めて自然な音声波形が出力されます。しかしその一方で、<strong>「なぜそのスペクトル包絡になるのか」「声道の物理的制約や声帯振動の位相特性が知覚にどう効いているのか」</strong>という因果関係は、巨大な重み行列の奥に隠れてしまいました。
+        </p>
+        <p>
+          1930年代の Chiba &amp; Kajiyama（千葉・梶山）による声道模型の研究から、1960〜80年代の Kelly-Lochbaum 音響管モデル、線形予測分析（LPC）、板倉・斎藤による PARCOR / LSP（LSF）、そして Fant らの L-F 声帯音源モデルに至る先人たちの知恵は、単なる「過去の遺物」ではありません。これらは<strong>音声という物理現象を最小の自由度で記述するための数学的結晶</strong>であり、最新のニューラル音声コーデックや微分可能DSP（DDSP）の設計思想にもそのまま息づいています。
+        </p>
+        
+        <div class="try-box">
+          <div class="try-title">&#x1F5A5; 準備：2つのブラウザ窓を並べて最初の音を鳴らす</div>
+          <ol>
+            <li>画面の片側に <code>VTShapeToSound.html</code> を開き、もう片側にこの <code>tutorial.html</code> を並べて配置します。</li>
+            <li><code>VTShapeToSound</code> の右下にある <span class="ui-tag">Sound it</span> ボタンを押してみましょう。</li>
+            <li>さらに <span class="ui-tag">&#x2611; Release to play</span> にチェックを入れておくと、マウスを離すたびに自動で合成音が再生されるため、対話的な実験が快適になります。</li>
+          </ol>
+        </div>
+        
+        <p>
+          初期状態では、声道断面積（左上の青い丸印）がすべて「相対面積 $1$（対数面積 $0$）」の<strong>一様音響管（Uniform Tube）</strong>になっています。声道の長さが約 $17\text{ cm}$ のとき、一様音響管の共鳴周波数（ホルマント）は $500, 1500, 2500, 3500, 4500\text{ Hz}$ に等間隔で並び、曖昧母音（シュワー $/ \partial /$）のような音が聴こえます。また、再生中には右上のグラフに<strong>出力音声の短時間フーリエ変換（STFT）スペクトル（赤線）</strong>がアニメーション表示されます。
+        </p>
+        
+        <div class="video-card" data-video-key="intro"></div>
+      </section>
+      
+      <!-- =================================================================== -->
+      <!-- 第1章                                                               -->
+      <!-- =================================================================== -->
+      <section id="sec-ch1" class="chapter">
+        <span class="ch-badge">第1章</span>
+        <h2>声道の形から音へ ― 音響管モデルと声道長スケーリング</h2>
+        <p>
+          人間の声道（声門から唇までの空間）は、断面積が場所によって変化する1本の管としてモデル化できます。左上のグラフ（<strong>Vocal Tract Area Pad</strong>）は、横軸が<strong>唇からの距離 (cm)</strong>（左端 $0\text{ cm}$ が唇、右端が声門）、縦軸が<strong>相対断面積（対数スケール）</strong>を表しています。
+        </p>
+        
+        <div class="try-box">
+          <div class="try-title">&#x270F; 実験1-1：マウスで声道の形を描いて母音を作る</div>
+          <ol>
+            <li>左上のグラフ内をマウスでドラッグし、自由な曲線（緑色の軌跡）を描いてみましょう。マウスを離すと青い断面列が更新され、右下の<strong>3D声道チューブ</strong>の形と右上の<strong>伝達関数ゲイン（青線）</strong>が瞬時に変化します。</li>
+            <li><strong>母音 /a/（ア）を作る：</strong> 唇側（左側 $0\sim 7\text{ cm}$）を広く（面積 $4\sim 8$ 程度）、喉の奥側（右側 $9\sim 15\text{ cm}$）を狭く（面積 $0.5\sim 1$ 程度）描いてみましょう。第1ホルマント（$F_1$）が高く、第2ホルマント（$F_2$）が近づき、「ア」に近い音色になります。</li>
+            <li><strong>母音 /i/（イ）を作る：</strong> 逆に、前方の硬口蓋付近（左側 $2\sim 6\text{ cm}$）を狭く絞り、奥の咽頭腔（右側 $10\sim 15\text{ cm}$）を広く描くと、$F_1$ が下がり $F_2$ が大きく上昇して「イ」の音色に変化します。</li>
+            <li>元に戻したいときは、左上グラフ内の <span class="ui-tag">Reset</span> ボタンを押します。</li>
+          </ol>
+        </div>
+        
+        <div class="try-box">
+          <div class="try-title">&#x1F4CF; 実験1-2：声道長（VTL）を変えて子供の声・巨人の声にする</div>
+          <ol>
+            <li>左上グラフの $8\text{ cm}$ 付近にある<strong>水色の太い縦線（VTLハンドル）</strong>にマウスを重ねると、左右矢印カーソルに変わります。</li>
+            <li>この水色の線を<strong>右へドラッグ</strong>すると声道長（VT length）が短くなり（例：$12\text{ cm}$）、すべてのホルマント周波数が高域へシフトして子どものような声になります。</li>
+            <li>逆に<strong>左へドラッグ</strong>すると声道長が長くなり（例：$24\text{ cm}$）、大柄な話者の声になります。中央パネルの <span class="ui-tag">Source</span> で <code>Female</code>（$F_0 = 250\text{ Hz}$）と組み合わせると、声の高さ（$F_0$）と声道長（VTL）が独立した物理量であることが体感できます。</li>
+          </ol>
+        </div>
+        
+        <div class="video-card" data-video-key="ch1"></div>
+        
+        <details class="deep-dive">
+        <summary>理論と歴史を深掘りする：Kelly-Lochbaum 音響管と反射係数</summary>
+        <div class="deep-dive-body">
+          <p>
+            1941年に千葉勉と梶山正登は名著 <em>"The Vowel: Its Nature and Structure"</em> において、声道の断面積関数から母音の音色が決定されることを明らかにしました。その後、1962年にベル研究所の Kelly と Lochbaum は、声道を等しい長さ $\Delta x$ を持つ $N$ 個の円筒セクションの連結として離散化し、ディジタル計算機上で音波の伝播をシミュレートする<strong>Kelly-Lochbaumモデル</strong>を提案しました。
+          </p>
+          <p>
+            音速を $c = 35000\text{ cm/s}$、標本化周波数を $f_s = 44100\text{ Hz}$ とすると、1サンプル時間に音波が往復するセクション長は次式で定まります：
+          </p>
+          $$\Delta x = \frac{c}{2 f_s} \approx 0.397\text{ cm}$$
+          <p>
+            隣接する第 $i$ セクションの断面積 $S_i$ と第 $i+1$ セクションの断面積 $S_{i+1}$ の境界では、音響インピーダンスの不連続により音波の反射が生じます。このときの<strong>反射係数（Reflection Coefficient）</strong> $k_i$ は次式で与えられます：
+          </p>
+          $$k_i = \frac{S_{i+1} - S_i}{S_{i+1} + S_i} \quad (-1 < k_i < 1)$$
+          <p>
+          断面積がすべて等しい一様管ではすべての境界で $k_i = 0$ となり、途中での反射は起きません。一方、声道に狭め（狭窄）を作ると $|k_i|$ が大きくなり、特定の周波数で強い定在波（ホルマント共鳴）が立ち上がります。本ツールの <code>VocalTractModel</code> クラスは、描かれた対数断面積から即座に $k_i$ を算出し、Levinson型のステップアップ再帰によって全極型ディジタルフィルタ $1/A(z)$ の予測係数へと変換しています。
+        </p>
+      </div>
+      </details>
+    </section>
+    
+    <!-- =================================================================== -->
+    <!-- 第2章                                                               -->
+    <!-- =================================================================== -->
+    <section id="sec-ch2" class="chapter">
+      <span class="ch-badge">第2章</span>
+      <h2>空間のフーリエ基底で声道を操る ― 調音パラメータの低次元化</h2>
+      <p>
+        $44.1\text{ kHz}$ 駆動の音響管モデルでは、約 $17\text{ cm}$ の声道が四十数個の微小セクションに分割されています。しかし、実際の私たちの舌や顎は、隣り合う数ミリごとの断面をギザギザに独立して動かしているわけではなく、<strong>空間的に滑らかな大局的変形</strong>を行っています。
+      </p>
+      <p>
+        画面左下の領域（<strong>Fourier Modifier Axis</strong>）は、声道の対数断面積を<strong>空間周波数の低い正弦波・余弦波（第1〜第3調波＋直流成分の計7基底）</strong>の重ね合わせとして操作する仕組みです。
+      </p>
+      
+      <div class="try-box">
+        <div class="try-title">&#x1F39A; 実験2：7つの基底と拡大スライダで声道を連続変形する</div>
+        <ol>
+          <li>まず左上の <span class="ui-tag">Reset</span> を押して一様管に戻し、左下の <span class="ui-tag">Show all</span> ボタンを押します。7本の色付き正弦波・余弦波と、それらの合成波形である<strong>太い黒線</strong>が表示されます。</li>
+          <li>一番左端にある<strong>青い縦のレール（Magnifier Slider）</strong>の十字ノブ（<code>+</code>）を上下にドラッグしてみてください。左上の声道断面積（青線）と緑色のインジケータが連動して大きくうねり、音色が連続的にモーフィングされます。</li>
+          <li>次に、左下の <span class="ui-tag">Reset</span> を押してすべての基底係数を $0$ にした後、7つの<strong>色付き丸印（アンカー）</strong>のうち1つだけを上下にドラッグしてみましょう。</li>
+          <li><strong>空間の第1周期成分（唇側と喉側で逆相に動く成分）</strong>だけを動かしたときと、<strong>第2・第3周期成分</strong>を動かしたときで、右上の第1・第2・第3ホルマントがそれぞれどのように移動するか観察してみましょう。</li>
+        </ol>
+      </div>
+      
+      <div class="video-card" data-video-key="ch2"></div>
+      
+      <details class="deep-dive">
+      <summary>理論と歴史を深掘りする：声道断面積の固有モード展開と摂動理論</summary>
+      <div class="deep-dive-body">
+        <p>
+          一様音響管の対数断面積 $\log S(x)$ に対して空間的な微小摂動 $\Delta \log S(x)$ を加えたとき、第 $n$ ホルマント周波数 $F_n$ がどれだけシフトするかは、声道長を $L$ とすると空間の余弦成分 $\cos\left(\frac{(2k-1)\pi x}{L}\right)$ との内積によって一次近似できることが知られています（Schroeder 1967, Mermelstein 1967）。
+        </p>
+        <p>
+          本ツールでは、唇からの距離 $x \in [0, L]$ に対して以下の7つの空間フーリエ基底 $\phi_m(x)$ を用意しています：
+        </p>
+        $$\phi_{2k-1}(x) = \sin\left(\frac{k \pi x}{L}\right), \quad \phi_{2k}(x) = \cos\left(\frac{k \pi x}{L}\right) \quad (k = 1, 2, 3), \quad \phi_7(x) = 1$$
+        <p>
+          これにより、40次元以上の断面ベクトルをわずか数個の係数で滑らかに制御できるだけでなく、さらにその上から自由曲線を描き足すことで「大局的な母音構え＋局所的な子音狭窄」の合成も直感的に行えます。
+        </p>
+      </div>
+      </details>
+    </section>
+    
+    <!-- =================================================================== -->
+    <!-- 第3章                                                               -->
+    <!-- =================================================================== -->
+    <section id="sec-ch3" class="chapter">
+      <span class="ch-badge">第3章</span>
+      <h2>スペクトル・極（ホルマント）・LSFの双対性</h2>
+      <p>
+        ここまでは「声道の形 $\rightarrow$ スペクトル（順問題）」を動かしましたが、このツールの真骨頂は<strong>「スペクトル上の極（ホルマント）を直接つまんで動かすと、対応する声道の形がリアルタイムに逆算される（逆問題）」</strong>点にあります。
+      </p>
+      <p>
+        右上のグラフ（<strong>GainPlot</strong>）には、2つの縦軸があります：
+      </p>
+      <ul>
+        <li><strong>左縦軸（青色）：</strong> 声道伝達関数のゲイン（dB）と青い実線スペクトル。</li>
+        <li><strong>右縦軸（オレンジ色）：</strong> 伝達関数の<strong>極（Pole）の帯域幅（Bandwidth: Hz）</strong>。上に行くほど帯域幅が狭く（$1\text{ Hz}$）、鋭い共鳴ピークになります。プロット内の<span class="color-dot" style="background:#d95319;"></span><strong>オレンジ色の丸印</strong>が各ホルマント極の位置（横軸：周波数、縦軸：帯域幅）を表しています。</li>
+      </ul>
+      
+      <div class="try-box">
+        <div class="try-title">&#x1F3AF; 実験3-1：極（オレンジ色の丸）を直接ドラッグして声道を逆算する</div>
+        <ol>
+          <li>まず左上グラフで適当な曲線を描いて、右上のグラフにオレンジ色の丸印（極）を出現させます。</li>
+          <li>オレンジ色の丸印の上にマウスカーソルを合わせると指マークに変わります。そのままドラッグして<strong>左右（周波数の変更）</strong>や<strong>上下（帯域幅の変更）</strong>に動かしてみましょう。</li>
+          <li>極を1つ動かすだけで、その伝達関数を実現するために必要な<strong>左上グラフの声道断面積全体が瞬時に再計算されて変形する</strong>様子を確認してください。</li>
+          <li>丸印を<strong>上方向（帯域幅 $10\text{ Hz}$ 以下）</strong>へ持ち上げると、スペクトルの山が針のように鋭くなり、合成音に「ピー」という強い共鳴音（笛のような鳴り）が混じることを聴いて確かめましょう。</li>
+        </ol>
+      </div>
+      
+      <div class="try-box">
+        <div class="try-title">&#x1F4CA; 実験3-2：青い破線（LSF: 線スペクトル対）のインターレース性を観察する</div>
+        <ol>
+          <li>右上のグラフに並んでいる<strong>青い縦の破線</strong>に注目してください。これはLPC予測多項式から算出された <strong>LSF（Line Spectral Frequencies / 線スペクトル対 LSP）</strong> です。</li>
+          <li>スペクトルの山（極）が高い場所では、青い破線が<strong>2本〜3本ギュッと密集</strong>し、平坦な場所では等間隔に離れていることがわかります。</li>
+          <li>どんなに極端に声道を描いたり極を動かしたりしても、<strong>青い破線同士が交差して順番が入れ替わることは絶対にありません</strong>。</li>
+        </ol>
+      </div>
+      
+      <div class="video-card" data-video-key="ch3"></div>
+      
+      <details class="deep-dive">
+      <summary>理論と歴史を深掘りする：なぜLPC・PARCOR・LSF（LSP）が世界を変えたのか？</summary>
+      <div class="deep-dive-body">
+        <p>
+          1960年代末、板倉文忠と斎藤収三（電電公社武蔵野通研）、および米国の Atal らは、音声のスペクトル包絡を全極型フィルタ $H(z) = 1 / A(z)$ として推定する<strong>線形予測分析（LPC）</strong>と<strong>PARCOR（偏自己相関）係数</strong>を確立しました：
+        </p>
+        $$A(z) = 1 + \sum_{k=1}^{p} a_k z^{-k} = \prod_{k=1}^{p} (1 - z_k z^{-1})$$
+        <p>
+          極 $z_k = r_k e^{j\theta_k}$ の偏角 $\theta_k$ がホルマント角周波数、絶対値 $r_k = \exp(-\pi B_k / f_s)$ が帯域幅 $B_k$ に対応します。本ツール（JavaScript版）では、次数 $p \approx 44$ の多項式 $A(z)$ のすべての複素根を <strong>Aberth-Ehrlich 同時反復法</strong> によってミリ秒単位で求め、逆に極をドラッグした際には根から多項式 $A(z)$ を再構成し、ステップダウン再帰（<code>lpcToReflection</code>）で反射係数 $k_i$（$|k_i| \le 0.995$ に安定化クランプ）へ戻すことで声道断面積 $S_i$ を復元しています。
+        </p>
+        <p>
+          さらに1975年、板倉によって発明された <strong>LSP（Line Spectrum Pairs / LSF）</strong> は、声門端を「完全閉鎖」または「完全開放」した境界条件に対応する対称多項式 $P(z)$ と反対称多項式 $Q(z)$ を定義します：
+        </p>
+        $$P(z) = A(z) + z^{-(p+1)} A(z^{-1}), \qquad Q(z) = A(z) - z^{-(p+1)} A(z^{-1})$$
+        <p>
+          フィルタ $1/A(z)$ が安定（すべての極が単位円内）であるための必要十分条件は、<strong>「$P(z)$ と $Q(z)$ のすべての根が単位円上にあり、かつ交互に並ぶ（インターレースする）こと」</strong>です。予測係数 $a_k$ をそのまま量子化したりフレーム間で線形補間したりするとフィルタが容易に発散してしまいますが、LSF領域であれば「昇順に並んでいる限り100%安定」が保証されます。この驚異的な性質により、LSFは携帯電話の標準音声コーデック（AMR, EVRC, SILK, Opus等）から統計的音声合成に至るまで、40年以上にわたり世界中の通信インフラを支え続けています。
+        </p>
+      </div>
+      </details>
+    </section>
+    
+    <!-- =================================================================== -->
+    <!-- 第4章                                                               -->
+    <!-- =================================================================== -->
+    <section id="sec-ch4" class="chapter">
+      <span class="ch-badge">第4章</span>
+      <h2>声帯音源のデザインと抗エイリアシング ― L-FモデルとF0軌跡</h2>
+      <p>
+        ソース・フィルタ理論のもう一方の主役が<strong>声帯音源（Glottal Source）</strong>です。声帯の開閉によって生じる体積流（Volume Velocity: $U_g(t)$）と、唇での放射特性を含めたその時間微分波形（Glottal Flow Derivative: $E_g(t) = dU_g/dt$）の形状が、声の「張り」「息漏れ感（気息性）」「きしみ（ボーカルフライ）」といった<strong>声質（Voice Quality）</strong>を決定づけます。
+      </p>
+      
+      <div class="try-box">
+        <div class="try-title">&#x1F3B5; 実験4-1：L-Fモデルの4つの時間パラメータを動かして声質をデザインする</div>
+        <ol>
+          <li>画面最上部のタブバーで <span class="ui-tag">2. L-F Source &amp; F0 Designer</span> タブをクリック（または中央 Source パネルの Voice Quality で <code>Design</code> を選択）します。</li>
+          <li>左上が1周期分の<strong>声門体積流 $U_g(t)$</strong>、左下が<strong>微分声門流 $E_g(t)$（L-Fモデル波形）</strong>、右上が $+6\text{ dB/oct}$ 強調された<strong>音源スペクトル包絡</strong>です。</li>
+          <li>左下グラフ内の青い縦線（<strong>$t_p, t_e, t_c$</strong>）と赤い丸印（<strong>$t_a$：復帰相の時定数</strong>）を左右にドラッグしてみましょう。</li>
+          <li>特に<strong>赤い丸印（$t_a$）を右へ倒す（$t_a$ を大きくする）</strong>と、声門閉鎖時の角が丸まり、右上グラフの高域スペクトルが急激に減衰して<strong>息漏れ声（Breathy voice）</strong>になります。逆に $t_a$ を左端へ近づけると、閉鎖時点 $t_e$ で鋭い不連続（インパルス状の励振）が生じ、高次倍音まで豊かな<strong>張りのある声（Modal / Pressed voice）</strong>になります。</li>
+          <li>右下の <span class="ui-tag">Play Source</span> ボタンを押すと、声道フィルタを通す前の「声帯音源そのままの音」を聴くことができます。</li>
+        </ol>
+      </div>
+      
+      <div class="try-box">
+        <div class="try-title">&#x1F4C8; 実験4-2：F0軌跡をフリーハンドで描いてイントネーションをつける</div>
+        <ol>
+          <li>第1タブの <span class="ui-tag">Source</span> パネルにある <code>Male</code> ドロップダウンを <code>Design</code> に切り替える（または第2タブ右下の F0 キャンバスを表示する）と、<strong>F0軌跡スケッチパッド</strong>が有効になります。</li>
+          <li>右下の白いグラフ（横軸：時間、縦軸：音名）の上でマウスをドラッグして、自由なピッチ曲線（疑問文のような尻上がりや、抑揚のあるメロディ）を描いてみましょう。</li>
+          <li>左端の青い縦スライダで基準F0を上下でき、グラフ中央の緑の縦線を左右にドラッグすると全体の<strong>発話時間長（Duration）</strong>を伸縮できます。</li>
+          <li><span class="ui-tag">&#8592; Back to Vocal Tract</span> で第1タブに戻り、<span class="ui-tag">Sound it</span> を押すと、あなたがデザインした声質とF0イントネーションで声道が鳴り響きます！</li>
+        </ol>
+      </div>
+      
+      <div class="video-card" data-video-key="ch4"></div>
+      
+      <details class="deep-dive">
+      <summary>理論と歴史を深掘りする：L-Fモデルの数式と「解析的抗エイリアシング」の仕掛け</summary>
+      <div class="deep-dive-body">
+        <p>
+          1985年に Gunnar Fant, Johan Liljencrants, Qiguang Lin が提案した <strong>L-Fモデル（Liljencrants-Fant Model）</strong> は、1周期（正規化時間 $0 \le t \le 1$）の微分声門流 $E_g(t)$ を、開放相（Opening Phase: $0 \le t < t_e$）の指数増大正弦波と、復帰相（Return Phase: $t_e \le t \le t_c$）の指数減衰曲線という2つの区間で記述します：
+          </p>
+          $$E_g(t) = \begin{cases} E_0 e^{\alpha t} \sin(\omega_g t) & (0 \le t < t_e) \\[6pt] -\dfrac{E_e}{\varepsilon t_a} \left[ e^{-\varepsilon (t - t_e)} - e^{-\varepsilon (t_c - t_e)} \right] & (t_e \le t \le t_c) \\[6pt] 0 & (t_c < t \le 1) \end{cases}$$
+          <p>
+          ここで $\omega_g = \pi / t_p$ であり、減衰率 $\varepsilon$（コード内では <code>betaa</code>）と増大率 $\alpha$（<code>alphaa</code>）は、「1周期にわたる微分の積分値（＝閉鎖時の体積流）が厳密にゼロに戻る」という物理的境界条件 $\int_0^{t_c} E_g(t) dt = 0$ を満たすように非線形方程式（<code>fzero</code>）を解いて決定されます。
+        </p>
+        <p>
+          <strong>【なぜ単純に計算すると音が汚くなるのか？（エイリアシング問題）】</strong><br>
+          L-Fモデルの波形は $t = t_e$ において導関数が不連続（折れ曲がり）になるため、その周波数スペクトルは無限遠の周波数まで $1/\omega^2$（$-12\text{ dB/oct}$）でしか減衰しません。これを離散時間サンプル点 $t = n / f_s$ でそのまま標本化すると、ナイキスト周波数 $f_s/2$ を超えた高調波成分が折り返す<strong>エイリアシング雑音</strong>が発生し、特にF0を動かした際に「ジリジリ」という耳障りな非調和ノイズとして知覚されます。
+        </p>
+        <p>
+          本ツールの <code>LFSourceModel</code> クラスには、河原（2015）による<strong>6項コサイン窓（Nuttall型の連続微分窓）を用いた解析的畳み込み積分（Analytical Antialiasing）</strong>が実装されています。連続時間領域で区分的な複素指数関数 $e^{\beta t}$ および多項式と、有限長の低域通過コサイン窓 $w(t) = \sum_{k=0}^{5} a_k \cos(k \pi t / t_w)$ の畳み込み積分を<strong>数式として厳密に解いた閉形式（Closed-form）</strong>で計算した上でサンプル点を評価し、最後に窓関数による高域の緩やかな減衰を最小位相FIR/IIRイコライザ（<code>equalizerDesignAAFX</code>）で補償しています。これにより、オーバーサンプリングを一切行わずに、折り返し雑音のない透き通った声帯音源波形を実時間生成しています。
+        </p>
+      </div>
+      </details>
+    </section>
+    
+    <!-- =================================================================== -->
+    <!-- 第5章                                                               -->
+    <!-- =================================================================== -->
+    <section id="sec-ch5" class="chapter">
+      <span class="ch-badge">第5章</span>
+      <h2>自分の声とモデルを重ね合わせる ― リアルタイム・スペクトルモニタ</h2>
+      <p>
+        最後のステップとして、これまで学んだ「声道フィルタ＋L-F声帯音源」による総合スペクトル包絡（緑線）と、<strong>今この瞬間にマイクから入力されるあなた自身の声のスペクトル（黒線）</strong>を同じグラフ上で重ね合わせて比較してみましょう。
+      </p>
+      
+      <div class="try-box">
+        <div class="try-title">&#x1F3A4; 実験5：自分の母音を観察し、同じ音色を合成してみる</div>
+        <ol>
+          <li>第1タブ右下の <span class="ui-tag">&#x2611; Monitor</span> チェックボックスをONにすると、<strong>Sound Monitor</strong> パネルが現れます。</li>
+          <li><span class="ui-tag">Start</span> ボタンを押してブラウザのマイク使用を許可し、マイクに向かって「アー」や「イー」と持続母音を発声してみましょう。</li>
+          <li>右上グラフに<strong>黒い実線（60 ms Nuttall窓による 8192点 FFT スペクトル）</strong>がリアルタイムに描画されます。良いところで <span class="ui-tag">Stop</span> を押すと、その瞬間のスペクトルが画面に固定され、<span class="ui-tag">Play</span> ボタンで直近 $200\text{ ms}$ の録音音声を聴き返すことができます。</li>
+          <li>固定された黒線のスペクトル包絡のピーク位置（第1・第2・第3ホルマント）と高域への傾き（スペクトルティルト）をよく観察し、<strong>極のドラッグや声道描画、VTL調整、L-Fモデル調整</strong>を駆使して、青い伝達関数（または緑色の総合スペクトル包絡）をあなたの声のピークに重ね合わせてみましょう！</li>
+          <li>うまく合成できたら、<span class="ui-tag">Save &#9662;</span> ボタンから好きなフォルダを選んで <strong>24-bit WAV音声（<code>.wav</code>）・断面積テキスト（<code>.txt</code>）・状態ファイル（<code>.json</code>）</strong> を保存してみましょう。</li>
+        </ol>
+      </div>
+      
+      <div class="video-card" data-video-key="ch5"></div>
+      
+      <details class="deep-dive">
+      <summary>理論と歴史を深掘りする：Analysis-by-Synthesis (AbS) から現代の音声科学へ</summary>
+      <div class="deep-dive-body">
+        <p>
+          今あなたが手動で行った「観測された実音声のスペクトルに最も近くなるように、内部の生成モデルのパラメータを調整する」というアプローチこそが、1960年代に Bell 研や MIT（Stevens &amp; Halle）で提唱された <strong>Analysis-by-Synthesis（合成による分析：AbS）</strong> そのものです。
+        </p>
+        <p>
+          現代のニューラル音声合成や自己教師あり学習モデル（WavLM, HuBERT等）を研究する際にも、「フォルマント遷移がなぜその軌跡を描くのか」「声帯閉鎖の急峻さがスペクトル傾斜と知覚的な声の張り・距離感にどう寄与するのか」「どの特徴量が声道長（話者性）に依存し、どの特徴量が音韻に依存するのか」を物理レベルで体感していることは、モデルの挙動を解釈し新しいアーキテクチャを設計する上で強力な羅針盤になります。
+        </p>
+        <p><strong>【主要参考文献】</strong></p>
+        <ul class="ref-list">
+          <li>T. Chiba and M. Kajiyama, <em>The Vowel: Its Nature and Structure</em>, Tokyo-Kaiseikan, 1941.</li>
+          <li>J. L. Kelly and C. C. Lochbaum, "Speech synthesis," <em>Proc. Stockholm Speech Comm. Seminar</em>, 1962.</li>
+          <li>F. Itakura, "Line spectrum representation of linear predictor coefficients of speech signals," <em>J. Acoust. Soc. Am.</em>, 57(S1), S35, 1975.</li>
+          <li>G. Fant, J. Liljencrants, and Q. Lin, "A four-parameter model of glottal flow," <em>STL-QPSR</em>, 26(4), 1–13, 1985.</li>
+          <li>A. H. Nuttall, "Some windows with very good sidelobe behavior," <em>IEEE Trans. ASSP</em>, 29(1), 84–91, 1981.</li>
+          <li>河原英紀, <em>音響学講座 5 聴覚 / 音声生成と分析合成ツール群</em>, GitHub / 講義資料, 2015–2026.</li>
+        </ul>
+      </div>
+      </details>
+    </section>
+    
+    <footer>
+      <p>VTShapeToSound &amp; LFModelDesigner Interactive Tutorial &mdash; Created for Graduate Speech Science Education</p>
+    </footer>
+    
+  </div>
+  
+  <!-- ===================================================================== -->
+  <!-- ハイブリッド動画プレイヤー生成スクリプト                              -->
+  <!-- ===================================================================== -->
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const cards = document.querySelectorAll(".video-card");
+        
+        cards.forEach(card => {
+            const key = card.getAttribute("data-video-key");
+            const cfg = VIDEO_CONFIG[key];
+            if (!cfg) return;
+            
+            const hasYouTube = Boolean(cfg.youtubeId && cfg.youtubeId.trim().length > 0);
+            const defaultMode = hasYouTube ? "yt" : "local";
+            
+            card.innerHTML = `
+            <div class="video-header">
+            <div class="video-title">&#x1F3AC; ${cfg.title}</div>
+            <div class="video-controls">
+            <button type="button" class="v-btn ${defaultMode === 'yt' ? 'active' : ''}" data-mode="yt">YouTubeで視聴</button>
+            <button type="button" class="v-btn ${defaultMode === 'local' ? 'active' : ''}" data-mode="local">ローカルMP4再生</button>
+            <a class="v-btn dl-btn" href="${cfg.localMp4}" download>&#x2B07; MP4保存</a>
+            </div>
+            </div>
+            <div class="video-stage"></div>
+            `;
+            
+            const stage = card.querySelector(".video-stage");
+            const btns = card.querySelectorAll(".v-btn[data-mode]");
+            
+            const renderStage = (mode) => {
+              btns.forEach(b => b.classList.toggle("active", b.getAttribute("data-mode") === mode));
+              if (mode === "yt") {
+                if (hasYouTube) {
+                  stage.innerHTML = `<iframe src="https://www.youtube.com/embed/${cfg.youtubeId}?rel=0&playsinline=1" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>`;
+                } else {
+                  stage.innerHTML = `
+                  <div class="video-placeholder">
+                  <div style="font-size:15px; font-weight:600; color:#e2e8f0; margin-bottom:6px;">YouTube 動画（準備中）</div>
+                  <div><code>tutorial.html</code> 冒頭の <code>VIDEO_CONFIG.${key}.youtubeId</code> に<br>YouTubeのVideo IDを設定するとここに埋め込み表示されます。</div>
+                  <div style="margin-top:8px;">ローカル動画がある場合は右上の <strong>[ローカルMP4再生]</strong> をクリックしてください。</div>
+                  </div>
+                  `;
+                }
+              } else {
+                stage.innerHTML = `
+                <video controls playsinline webkit-playsinline preload="metadata" src="${cfg.localMp4}">
+                お使いのブラウザは video タグをサポートしていません。
+                </video>
+                `;
+              }
+            };
+            
+            btns.forEach(btn => {
+                btn.addEventListener("click", () => renderStage(btn.getAttribute("data-mode")));
+            });
+            
+            renderStage(defaultMode);
+        });
+    });
+  </script>
+</body>
+</html>
