@@ -4,6 +4,8 @@ A new series of acoustic attribute analyses. This extends safeguarding sounds an
 
 ## Added several files for Onsei Symposium 2026 Dec. (27 Dec. 2026)
 
+They are in src
+
 tutorialVTS2S_iOS.html
 
 tutorial_ja_iOS.html
