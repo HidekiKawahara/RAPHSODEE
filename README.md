@@ -2,6 +2,18 @@
 
 A new series of acoustic attribute analyses. This extends safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
+Added several files for Onsei Symposium 2026 Dec. (27 Dec. 2026)
+
+tutorialVTS2S_iOS.html
+
+tutorial_ja_iOS.html
+
+tutorial_en_iOS.html
+
+acoustic_checker_gfft_worker.html
+
+VTShapeToSound_iOS.html
+
 ## Giant-FFT-based acoustic checker is implemented in MATLAB, Python, and JavaScript (20 Oct., 2026)
 
 They are in src
