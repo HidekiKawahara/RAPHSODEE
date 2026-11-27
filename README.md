@@ -2,7 +2,7 @@
 
 A new series of acoustic attribute analyses. This extends safeguarding sounds and CAPRICEP. This also has a fast but ecologically inefficient real-time reverberation application.
 
-Added several files for Onsei Symposium 2026 Dec. (27 Dec. 2026)
+## Added several files for Onsei Symposium 2026 Dec. (27 Dec. 2026)
 
 tutorialVTS2S_iOS.html
 
